@@ -1,0 +1,21 @@
+{
+ "sure_s": 345.8,
+ "kullanim": {
+  "wall_s": 344.96,
+  "load_s": 0.71,
+  "prompt_tokens": 12119,
+  "pp_tps": 1140.1,
+  "gen_tokens": 9197,
+  "tg_tps": 27.6,
+  "model_cagrisi": 4
+ },
+ "gizli": "12/12",
+ "dosyalar": [
+  "dama.py"
+ ],
+ "arac": [
+  "list_files **/*",
+  "write_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\zorluk\\dama_izinli\\dama.py",
+  "write_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\zorluk\\dama_izinli\\test_dama.py"
+ ]
+}
