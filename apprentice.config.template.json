@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "_not": [
+    "Apprentice tek ayar evi. Kopyala: apprentice.config.json (gitignore).",
+    "Oncelik sirasi: ortam degiskeni > bu dosya > kodun icindeki varsayilan.",
+    "Eklentiler kendi varsayilanlarini envs/<ad>/env.json 'ayarlar' bolumunde tasir; yukleyici <ad> anahtari altina birlestirir.",
+    "'_olcum' ile isaretli degerler olcumden geldi. Degistirmeden once notu oku."
+  ],
+  "ollama": {
+    "url": "http://localhost:11434",
+    "model": "hf.co/unsloth/Qwen3-Coder-Next-GGUF:UD-Q4_K_XL",
+    "keep_alive": "60m",
+    "timeout_s": 3600,
+    "_olcum_model": "6 model icinde kod yazmada anlamli bicimde one cikan tek model. Cloner 7.00/8 (stock 5.00, p=0.016), MCP 10/11, 29.6 tok/s. Q6 denendi: -%22 hiz, tek gorevde kazanc, degmez."
+  },
+  "makine": {
+    "_not": "BU MAKINEYE OZEL. Baska donanimda yeniden olculmeli - kopyalanmamali.",
+    "num_ctx": 65536,
+    "num_batch": 4096,
+    "olculdugu_gpu": "",
+    "ilk_calistirmada_olc": true,
+    "_olcum_ctx": "32768 -> 65536: yavaslama YOK (28.0 -> 28.9 tok/s, GPU payi %28 sabit). Sinir asilirsa Ollama prompt'u SESSIZCE yariya keser ve model kesik parcadan emin sekilde uydurur.",
+    "_olcum_batch": "16.6k tokenlik promptla: 512=189 t/s, 1024=320, 2048=520, 4096=730 (+%285). VRAM harcar - kucuk kartta sigmayabilir, o yuzden ilk calistirmada olculur. DIKKAT: kisa promptla olcum yaniltir."
+  },
+  "sampling": {
+    "temperature": 0.0,
+    "think": false,
+    "num_predict": 6000,
+    "max_steps": 12,
+    "retries": 2,
+    "_not_think": "false her model ailesinde OFF demek. 'low' YAZMA: eski bir surumde False->low cevrimi dusunmeyi gizlice geri acti ve bir kosu gorev basina ~3900 dusunme tokeni yakti."
+  },
+  "onarim": {
+    "compile_rounds": 3,
+    "play_enabled": false,
+    "play_rounds": 2,
+    "_not": "Play modu derleyicinin cevaplamadigi soruyu cevaplar. Bu projede derleyicinin goremedigi 3 hata yakaladi: recorderMode disinda playbackTime no-op, Play(string) hash ile cagrilmis, GameObject.Find pasif objede."
+  },
+  "prompt": {
+    "_not": "Ortam sistem istemleri ortamin kendi kosucusundadir; buraya yalnizca genel ek talimat konabilir.",
+    "ek_talimat": ""
+  }
+}

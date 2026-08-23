@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "apprentice": {
+      "command": "python",
+      "args": ["server/apprentice_server.py"],
+      "env": { "PYTHONIOENCODING": "utf-8" }
+    }
+  }
+}

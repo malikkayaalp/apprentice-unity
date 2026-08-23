@@ -1,0 +1,19 @@
+{
+  "_not": [
+    "mcpbridge icin ornek sunucu listesi (servers.json gitignore'da).",
+    "Her giris: command+args (stdio) ya da url (Streamable HTTP). Ornekler temsilidir."
+  ],
+  "servers": {
+    "fake": {
+      "command": "python",
+      "args": [
+        "mcpbridge/fake_server.py"
+      ],
+      "notes": "bagimliliksiz test sunucusu"
+    },
+    "ornek-http": {
+      "url": "http://127.0.0.1:8080/mcp",
+      "notes": "yerel HTTP MCP sunucusu ornegi"
+    }
+  }
+}
