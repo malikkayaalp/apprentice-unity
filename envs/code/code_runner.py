@@ -403,7 +403,7 @@ def test_errors(jail: Jail) -> list:
 
 
 def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
-                model: str, max_repairs: int, tools: list | None = None) -> dict:
+                model: str, max_repairs: int, tools: list | None = None, em=None) -> dict:
     tools = tools if tools is not None else TOOLS
     msgs.append({"role": "user", "content": request})
     t0 = time.time()
@@ -438,9 +438,13 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
             duragan = True
             errs = ["DURAGANLIK: ayni test hatalari 2 tur ust uste degismedi - isci "
                     "ilerleyemiyor, usta mudahalesi gerekli.\n" + errs[0]]
+            if em:
+                em.emit("duraganlik", imza_sayisi=len(imzalar), tur=rounds)
             break
         onceki_imzalar = imzalar if imzalar is not None else onceki_imzalar
         rounds += 1
+        if em:
+            em.emit("onarim", tur=rounds, mesaj="\n".join(errs[:6])[:500])
         msgs.append({"role": "user", "content":
                      "DOGRULAMA HATASI:\n" + "\n".join(errs[:6]) +
                      "\nIlgili dosyayi read_file ile oku, sebebi bul ve write_file ile "
@@ -571,15 +575,21 @@ def main() -> int:
             # PROJE HARITASI (2026-08-24, OpenMemory'nin MAP fikri): hedefin YERI bilinmeyen
             # iste isci adressiz kaliyordu (olculdu: 120 dosyayi sirayla okuyup coktu).
             # Harita "dosya -> semboller" adresini sifir sorguyla verir; denetci acar (harita=true).
+            harita_n = 0
             if os.environ.get("APPRENTICE_HARITA") == "1":
                 try:
                     from core import harita as HARITA
-                    sistem += "\n\n" + HARITA.uret(jail.root)[:16000] + \
+                    h = HARITA.uret(jail.root)[:16000]
+                    harita_n = len(h)
+                    sistem += "\n\n" + h + \
                               "\nHaritadaki adresi kullan: once ilgili dosyayi read_file ile oku."
                 except Exception as e:                           # noqa: BLE001 - harita cokse is surer
                     em.emit("system", subtype="harita_hatasi", error=str(e)[:200])
+            # Izlenebilirlik: sistem istemine NE girdigini izleyici gorsun (boyutlar karakter)
+            em.emit("baglam", sistem=len(sistem), hafiza=len(hafiza), durum=len(durum),
+                    harita=harita_n, araclar=[t["function"]["name"] for t in tools])
             msgs = [{"role": "system", "content": sistem}]
-        r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools)
+        r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools, em=em)
         save_session(a.session_dir, a.session, msgs, a.model)
         if r["text"]:
             em.emit("assistant", text=r["text"])

@@ -196,6 +196,26 @@ class Job:
             pass
         return out
 
+    def usta_rapor_isaretle(self, rep: dict):
+        """Is bittiginde 'ustaya ne gitti' olayini events.jsonl'a BIR KEZ ekler - izleyici
+        boru hattinin son halkasini da gorsun (isci sureci coktan bitmistir, dosya bizim)."""
+        if getattr(self, "_usta_isaretli", False) or not self.done:
+            return
+        self._usta_isaretli = True
+        try:
+            with open(os.path.join(self.dir, "events.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "usta_rapor", "t": time.time(),
+                                    "derleme_durumu": rep.get("derleme_durumu"),
+                                    "dosya": [d["yol"] for d in rep.get("yazilan_dosyalar", [])],
+                                    "hata_sayisi": len(rep.get("hatalar", [])),
+                                    "uyarilar": [k for k in ("duragan", "ruff_uyarilari",
+                                                             "butce_uyarisi", "hafiza_uyarisi",
+                                                             "durum_uyarisi") if rep.get(k)],
+                                    "kullanim": rep.get("kullanim") or {}},
+                                   ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+
     def report(self) -> dict:
         """Sozlesme: yazilan_dosyalar, derleme_durumu, hatalar, tur_sayisi, sure, ozet (+ek)."""
         ev = self.events()
@@ -463,6 +483,7 @@ def tool_worker_run(a: dict) -> dict:
         if getattr(job, "iptal", False):
             break
     rep = job.report()
+    job.usta_rapor_isaretle(rep)
     if getattr(job, "iptal", False):
         rep["derleme_durumu"] = "iptal"
         rep["hatalar"].append("istemci cagriyi iptal etti (zaman asimi?); isci durduruldu. "
@@ -563,7 +584,9 @@ def tool_worker_status(a: dict) -> dict:
         return {"hata": "bilinmeyen is_id %r (bu surecte: %s)" % (jid, list(JOBS)[-5:])}
     if a.get("durdur"):
         job.kill()
-    return job.report()
+    rep = job.report()
+    job.usta_rapor_isaretle(rep)
+    return rep
 
 
 TOOLS.append(

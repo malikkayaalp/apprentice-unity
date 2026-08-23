@@ -74,18 +74,44 @@ class IsDeposu:
         return {"id": jid, "ortam": job.get("ortam", "?"), "gorev": job.get("gorev", ""),
                 "dogrulama": job.get("dogrulama", "tam"), "baslangic": job.get("baslangic"),
                 "durum": "calisiyor", "derleme": "-", "tur": 0, "sure": None, "kullanim": {},
-                "dosyalar": [], "uyarilar": [], "hatalar": [], "ozet": "", "son_yazim": None}
+                "dosyalar": [], "uyarilar": [], "hatalar": [], "ozet": "", "son_yazim": None,
+                "asama": "baslama", "baglam": {},
+                "sayac": {"arac": 0, "yazim": 0, "noop": 0, "izin_red": 0,
+                          "kanit_hata": 0, "onarim": 0}}
 
     def _ozeti_isle(self, jid: str, yeni: list):
         s = self.durumlar[jid]
         for e in yeni:
             t = e.get("type")
-            if t == "write":
+            if t == "baglam":
+                s["asama"] = "uretim"
+                s["baglam"] = {k: e.get(k) for k in ("sistem", "hafiza", "durum", "harita")}
+                s["baglam"]["araclar"] = e.get("araclar") or []
+            elif t == "tool":
+                s["sayac"]["arac"] += 1
+                s["asama"] = "uretim"
+            elif t == "tool_result" and e.get("name") == "write_file":
+                k = kanit_coz(e.get("text") or "")
+                if k:
+                    s["sayac"][k["sayac"]] = s["sayac"].get(k["sayac"], 0) + 1
+            elif t == "onarim":
+                s["sayac"]["onarim"] = max(s["sayac"]["onarim"], int(e.get("tur", 0)))
+                s["asama"] = "onarim"
+            elif t == "duraganlik":
+                s["asama"] = "duraganlik"
+                s["uyarilar"].append("DURAGANLIK: %s imza %s turda degismedi"
+                                     % (e.get("imza_sayisi"), e.get("tur")))
+            elif t == "usta_rapor":
+                s["asama"] = "usta"
+            elif t == "write":
                 s["dosyalar"].append(e.get("path"))
+                s["sayac"]["yazim"] += 1
                 s["son_yazim"] = {"path": e.get("path"), "icerik": e.get("after") or ""}
             elif t == "assistant":
                 s["ozet"] = e.get("text", "")
             elif t == "result":
+                if s["asama"] not in ("duraganlik", "usta"):
+                    s["asama"] = "dogrulama"
                 s["derleme"] = "derlendi" if e.get("ok") else "hata"
                 s["tur"] = int(e.get("rounds", 0)) + 1
                 s["sure"] = e.get("wall")
@@ -111,6 +137,32 @@ class IsDeposu:
             s["sure"] = round(time.time() - s["baslangic"], 1)
 
 
+def kanit_coz(metin: str) -> dict | None:
+    """write_file cevabindaki kanit katmanini ayristirir (derleme/ruff/no-op/izin)."""
+    try:
+        d = json.loads(metin.rstrip(" …"))
+    except Exception:
+        return None
+    if not isinstance(d, dict):
+        return None
+    if "yazma izni yok" in str(d.get("error") or ""):
+        return {"sayac": "izin_red", "etiket": "hata", "metin": "IZIN RED  " + str(d["error"])[:110]}
+    if d.get("degisiklik") is False:
+        return {"sayac": "noop", "etiket": "hata",
+                "metin": "NO-OP     ayni icerik reddedildi (%s)" % d.get("path")}
+    parca = []
+    derleme = str(d.get("derleme") or "")
+    if derleme:
+        parca.append("derleme " + ("TEMIZ" if derleme.startswith("temiz") else derleme[:90]))
+    for u in (d.get("ruff") or [])[:3]:
+        parca.append("ruff " + str(u).split(":", 1)[-1].strip()[:80])
+    if not parca:
+        return None
+    hatali = (derleme and not derleme.startswith("temiz")) or d.get("ruff")
+    return {"sayac": "kanit_hata" if hatali else "arac",
+            "etiket": "hata" if hatali else "yazim", "metin": "KANIT     " + " | ".join(parca)}
+
+
 def olay_satiri(e: dict) -> tuple:
     """(etiket, metin) - GUI renk siniflari: arac / yazim / hata / sonuc / bilgi."""
     t = e.get("type")
@@ -118,8 +170,26 @@ def olay_satiri(e: dict) -> tuple:
         det = e.get("detail") or json.dumps(e.get("args") or {}, ensure_ascii=False)[:80]
         return "arac", "ARAC  %s %s" % (e.get("name"), det)
     if t == "tool_result":
+        if e.get("name") == "write_file":
+            k = kanit_coz(e.get("text") or "")
+            if k:
+                return k["etiket"], k["metin"]
         m = str(e.get("text") or "")[:120].replace("\n", " ")
         return "bilgi", "  -> %s" % (m or "ok")
+    if t == "baglam":
+        return "sonuc", ("BAGLAM sistem %s kr | hafiza %s | durum(STATE) %s | harita %s | araclar: %s" % (
+            e.get("sistem"), e.get("hafiza") or "-", e.get("durum") or "-",
+            e.get("harita") or "-", ",".join(e.get("araclar") or [])))
+    if t == "onarim":
+        return "arac", "ONARIM TUR %s -> isciye geri bildirim: %s" % (
+            e.get("tur"), str(e.get("mesaj", ""))[:160].replace("\n", " | "))
+    if t == "duraganlik":
+        return "hata", "DURAGANLIK: ayni hata imzasi degismiyor - isci kesildi, USTAYA devir"
+    if t == "usta_rapor":
+        return "sonuc", "USTAYA RAPOR: %s | dosya %s | uyari: %s | prompt %s tok" % (
+            e.get("derleme_durumu"), ",".join(e.get("dosya") or []) or "-",
+            ",".join(e.get("uyarilar") or []) or "-",
+            (e.get("kullanim") or {}).get("prompt_tokens", "-"))
     if t == "write":
         n = (e.get("after") or "").count("\n") + 1
         return "yazim", "YAZDI %s (%d satir)" % (e.get("path"), n)
@@ -201,8 +271,17 @@ def gui(home: str):
                        borderwidth=0, highlightthickness=0, font=("Consolas", 9))
     liste.pack(fill="y", expand=True, padx=8, pady=6)
 
-    # orta: olay akisi
+    # orta: asama seridi + olay akisi
     orta = tk.Frame(govde, bg=T["bg"]); orta.pack(side="left", fill="both", expand=True, padx=(8, 8))
+    serit = tk.Frame(orta, bg=T["bg"]); serit.pack(fill="x", pady=(0, 4))
+    ASAMALAR = [("baslama", "BASLADI"), ("uretim", "URETIM"), ("dogrulama", "DOGRULAMA"),
+                ("onarim", "ONARIM"), ("duraganlik", "DURAGANLIK"), ("usta", "USTA RAPORU")]
+    asama_kutulari = {}
+    for ad, etiket in ASAMALAR:
+        k = tk.Label(serit, text=etiket, bg=T["panel2"], fg=T["soluk"],
+                     font=(FONT, 8, "bold"), padx=8, pady=3)
+        k.pack(side="left", padx=(0, 4))
+        asama_kutulari[ad] = k
     tk.Label(orta, text="CANLI OLAY AKISI", bg=T["bg"], fg=T["soluk"],
              font=(FONT, 9, "bold")).pack(anchor="w")
     akis = tk.Text(orta, bg=T["panel"], fg=T["metin"], insertbackground=T["metin"],
@@ -277,14 +356,34 @@ def gui(home: str):
                 akis.configure(state="disabled")
                 durum["gosterilen"] = len(olaylar)
             s = depo.durumlar[jid]
+            # asama seridi: gecilen asamalar soluk-vurgulu, aktif olan turuncu
+            aktif = s.get("asama", "baslama")
+            for ad, _ in ASAMALAR:
+                k = asama_kutulari[ad]
+                if ad == aktif:
+                    k.configure(bg=T["vurgu"], fg="#ffffff")
+                elif ad in ("duraganlik",) and not any(u.startswith("DURAGANLIK")
+                                                       for u in map(str, s["uyarilar"])):
+                    k.configure(bg=T["panel2"], fg=T["cizgi"])       # hic yasanmadiysa iyice soluk
+                else:
+                    k.configure(bg=T["panel2"], fg=T["soluk"])
             ku = s.get("kullanim") or {}
+            b = s.get("baglam") or {}
+            sy = s.get("sayac") or {}
             satirlar = ["is: %s   ortam: %s   dogrulama: %s" % (jid, s["ortam"], s["dogrulama"]),
                         "durum: %s   derleme: %s   tur: %s   sure: %s s" % (
                             s["durum"], s["derleme"], s["tur"] or "-", s["sure"] or "-"),
                         "token: prompt %s / uretim %s / cagri %s" % (
                             ku.get("prompt_tokens", "-"), ku.get("gen_tokens", "-"),
                             ku.get("model_cagrisi", "-")),
-                        "gorev: " + (s["gorev"][:220] + ("..." if len(s["gorev"]) > 220 else ""))]
+                        "baglam: sistem %s kr, hafiza %s, STATE %s, harita %s" % (
+                            b.get("sistem", "-"), b.get("hafiza") or "-",
+                            b.get("durum") or "-", b.get("harita") or "-"),
+                        "araclar: " + (",".join(b.get("araclar") or []) or "-"),
+                        "sayac: %d arac, %d yazim, %d no-op, %d izin reddi, %d kanit hatasi, %d onarim" % (
+                            sy.get("arac", 0), sy.get("yazim", 0), sy.get("noop", 0),
+                            sy.get("izin_red", 0), sy.get("kanit_hata", 0), sy.get("onarim", 0)),
+                        "gorev: " + (s["gorev"][:200] + ("..." if len(s["gorev"]) > 200 else ""))]
             for u in s["uyarilar"][:5]:
                 satirlar.append("UYARI: " + str(u)[:120])
             for h in s["hatalar"][:3]:

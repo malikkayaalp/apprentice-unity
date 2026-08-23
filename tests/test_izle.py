@@ -28,13 +28,23 @@ def main() -> int:
     if os.path.isdir(HOME):
         shutil.rmtree(HOME)
     sahte_is("20260824-100000-aaaaaa", [
+        {"type": "baglam", "sistem": 1450, "hafiza": 231, "durum": 574, "harita": 0,
+         "araclar": ["read_file", "write_file", "list_files", "ara"]},
         {"type": "tool", "name": "read_file", "detail": "stok.py"},
         {"type": "tool_result", "text": "def stok_ekle..."},
         {"type": "write", "path": "stok.py", "after": "x = 1\ny = 2\n"},
+        {"type": "tool_result", "name": "write_file", "text": json.dumps(
+            {"ok": True, "path": "stok.py", "bytes": 12,
+             "derleme": "temiz - bu dosyada yapacak is kalmadiysa tekrar yazma"})},
+        {"type": "tool_result", "name": "write_file", "text": json.dumps(
+            {"ok": True, "path": "stok.py", "degisiklik": False, "uyari": "AYNI ICERIK..."})},
+        {"type": "onarim", "tur": 1, "mesaj": "unittest testleri: 1 failed"},
         {"type": "assistant", "text": "stok_tasi eklendi"},
         {"type": "result", "ok": True, "rounds": 0, "wall": 38.2, "errors": [],
          "kullanim": {"prompt_tokens": 5178, "gen_tokens": 700, "model_cagrisi": 3},
          "ruff": None, "duragan": False},
+        {"type": "usta_rapor", "derleme_durumu": "derlendi", "dosya": ["stok.py"],
+         "uyarilar": [], "kullanim": {"prompt_tokens": 5178}},
         {"type": "exit", "code": 0}])
     sahte_is("20260824-110000-bbbbbb", [
         {"type": "tool", "name": "write_file", "args": {"path": "a.py"}},
@@ -51,6 +61,9 @@ def main() -> int:
     s1 = depo.durumlar["20260824-100000-aaaaaa"]
     assert s1["durum"] == "bitti" and s1["derleme"] == "derlendi" and s1["tur"] == 1
     assert s1["kullanim"]["prompt_tokens"] == 5178
+    assert s1["asama"] == "usta", s1["asama"]                       # boru hattinin sonu
+    assert s1["baglam"]["hafiza"] == 231 and s1["baglam"]["durum"] == 574
+    assert s1["sayac"]["noop"] == 1 and s1["sayac"]["onarim"] == 1, s1["sayac"]
     assert s1["son_yazim"]["path"] == "stok.py" and "y = 2" in s1["son_yazim"]["icerik"]
     assert s1["ozet"] == "stok_tasi eklendi"
     s2 = depo.durumlar["20260824-110000-bbbbbb"]
@@ -74,7 +87,21 @@ def main() -> int:
     assert et == "hata"
     et, m = izle.olay_satiri({"type": "result", "ok": True, "rounds": 0, "wall": 10})
     assert et == "sonuc" and "derlendi" in m
-    print("olay satirlari: ok")
+    et, m = izle.olay_satiri({"type": "baglam", "sistem": 1450, "hafiza": 231, "durum": 574,
+                              "harita": 0, "araclar": ["read_file"]})
+    assert "BAGLAM" in m and "231" in m
+    et, m = izle.olay_satiri({"type": "duraganlik", "imza_sayisi": 1, "tur": 1})
+    assert et == "hata" and "USTAYA devir" in m
+    et, m = izle.olay_satiri({"type": "usta_rapor", "derleme_durumu": "derlendi",
+                              "dosya": ["a.py"], "uyarilar": ["duragan"], "kullanim": {}})
+    assert et == "sonuc" and "USTAYA RAPOR" in m and "duragan" in m
+    # kanit ayristirici
+    k = izle.kanit_coz(json.dumps({"ok": True, "path": "a.py",
+                                   "derleme": "temiz - ...", "ruff": ["a.py:2:1: F821 Undefined name `x`"]}))
+    assert k and k["etiket"] == "hata" and "F821" in k["metin"], k
+    k = izle.kanit_coz(json.dumps({"error": "yazma izni yok: b.py"}))
+    assert k and k["sayac"] == "izin_red"
+    print("olay satirlari + kanit ayristirici: ok")
 
     # GUI duman testi: surec 4 sn ayakta kalmali (aninda cokme = kurulum hatasi)
     p = subprocess.Popen([sys.executable, "-B", os.path.join(ROOT, "izle.py"), "--home", HOME],
