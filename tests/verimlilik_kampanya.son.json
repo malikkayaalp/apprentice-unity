@@ -1,0 +1,76 @@
+{
+ "zaman": "2026-08-23 19:05:13",
+ "hafiza_A_yok": {
+  "etiket": "A hafizasiz",
+  "dogrulama": "derleme",
+  "hafiza": false,
+  "sure_s": 39.2,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 4353,
+  "uretim_tok": 810,
+  "arac": 2,
+  "donus_tok": 651,
+  "gizli": "4/7",
+  "kural": "2/4",
+  "dosya": [
+   "odeme.py"
+  ],
+  "cikti": "HATA K1 fonksiyon adlari _kurus ile biter  ['hesapla_ara_toplam', 'hesapla_tutar']\nHATA K2 modul docstring var\nOK   K3 float para yok\nOK   K4 assert yok, ValueError var\nOK   D1 ara toplam 5000\nHATA D2 kargo fonksiyonu var\nOK   D4 negatif reddedilir\nKURAL 2/4\nPUAN 4/7\n",
+  "is_id": "20260823-190513-65cce2"
+ },
+ "hafiza_B_var": {
+  "etiket": "B hafizali",
+  "dogrulama": "derleme",
+  "hafiza": true,
+  "sure_s": 37.6,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 4584,
+  "uretim_tok": 674,
+  "arac": 2,
+  "donus_tok": 654,
+  "gizli": "7/8",
+  "kural": "3/4",
+  "dosya": [
+   "odeme.py"
+  ],
+  "cikti": "HATA K1 fonksiyon adlari _kurus ile biter  ['ara_toplam_hesapla', 'kargo_ekle']\nOK   K2 modul docstring var\nOK   K3 float para yok\nOK   K4 assert yok, ValueError var\nOK   D1 ara toplam 5000\nOK   D2 kargo eklenir (5000 -> 7999)  sonuc=7999\nOK   D3 50000 ustu bedava  sonuc=50000\nOK   D4 negatif reddedilir\nKURAL 3/4\nPUAN 7/8\n",
+  "is_id": "20260823-190552-16b421"
+ },
+ "kip_A_tam": {
+  "etiket": "A tam (test kosar)",
+  "dogrulama": "tam",
+  "hafiza": false,
+  "sure_s": 55.7,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 9495,
+  "uretim_tok": 1016,
+  "arac": 4,
+  "donus_tok": 1074,
+  "gizli": "10/10",
+  "kural": null,
+  "dosya": [
+   "aralik.py",
+   "test_aralik.py"
+  ],
+  "cikti": "OK   temel ornek\nOK   bos liste\nOK   tek aralik\nOK   degen [(1,4),(4,5)]\nOK   sirasiz [(5,7),(1,3),(2,4)]\nOK   icine alan [(1,10),(2,3)]\nOK   ayni aralik iki kez\nOK   bitisik degil [(1,2),(3,4)]\nOK   bas>son ValueError\nOK   girdi listesi degismez\nPUAN 10/10\n",
+  "is_id": "20260823-190630-e19515"
+ },
+ "kip_B_derleme": {
+  "etiket": "B derleme (yalniz yaz)",
+  "dogrulama": "derleme",
+  "hafiza": false,
+  "sure_s": 40.6,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 4265,
+  "uretim_tok": 855,
+  "arac": 2,
+  "donus_tok": 677,
+  "gizli": "10/10",
+  "kural": null,
+  "dosya": [
+   "aralik.py"
+  ],
+  "cikti": "OK   temel ornek\nOK   bos liste\nOK   tek aralik\nOK   degen [(1,4),(4,5)]\nOK   sirasiz [(5,7),(1,3),(2,4)]\nOK   icine alan [(1,10),(2,3)]\nOK   ayni aralik iki kez\nOK   bitisik degil [(1,2),(3,4)]\nOK   bas>son ValueError\nOK   girdi listesi degismez\nPUAN 10/10\n",
+  "is_id": "20260823-190725-15c858"
+ }
+}

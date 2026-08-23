@@ -95,9 +95,10 @@ def _diff_stat(before: str | None, after: str) -> tuple[int, int]:
 class Job:
     def __init__(self, ortam: str, gorev: str, kriterler: list, oturum: str,
                  play: bool, onarim: int, model: str, url: str, workdir: str = "",
-                 kapali: list | None = None, dogrulama: str = "tam"):
+                 kapali: list | None = None, dogrulama: str = "tam", yazilabilir: list | None = None):
         self.workdir = workdir
         self.dogrulama = dogrulama
+        self.yazilabilir = [str(x).strip() for x in (yazilabilir or []) if str(x).strip()]
         self.kapali = [str(k) for k in (kapali or []) if str(k).strip()]
         self.id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
         self.dir = os.path.join(HOME, "jobs", self.id)
@@ -142,6 +143,8 @@ class Job:
             env["APPRENTICE_TOOLS_OFF"] = ",".join(self.kapali)
         if self.dogrulama != "tam":
             env["APPRENTICE_DOGRULAMA"] = self.dogrulama
+        if self.yazilabilir:
+            env["APPRENTICE_YAZILABILIR"] = ",".join(self.yazilabilir)
         self.stderr_f = open(os.path.join(self.dir, "stderr.txt"), "w", encoding="utf-8")
         # stdin/stdout=DEVNULL SART: ikisi de MCP kanali. Olculdu: stdin miras alininca
         # cocuk Windows'ta ilk satirini bile yazmadan takildi (yalniz sunucu icinde).
@@ -418,7 +421,8 @@ def tool_worker_run(a: dict) -> dict:
               int(a.get("onarim", config.get("onarim.compile_rounds", 3))),
               config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model"),
               _kopru_url(ortam), workdir,
-              list(a.get("araclar_kapali") or []) + kapali_ek, dogrulama)
+              list(a.get("araclar_kapali") or []) + kapali_ek, dogrulama,
+              a.get("yazilabilir") or [])
     JOBS[job.id] = job
     rid = getattr(_CUR_REQ, "id", None)
     if rid is not None:
@@ -490,6 +494,10 @@ TOOLS = [
                            "description": "tam: isci testleri de kosar, ham test ciktisi doner (buyuk donus). "
                                           "derleme: isci YALNIZCA yazar - test/shell araclari kapali, harness test "
                                           "kosmaz, olcum donmez; kodu SEN okuyup onaylarsin ya da hatasini soylersin."},
+             "yazilabilir": {"type": "array", "items": {"type": "string"},
+                             "description": "Yazma izni verilen dosyalarin TAM listesi (calisma dizinine goreli). "
+                                            "Verilirse baska dosyaya yazma REDDEDILIR. Olculdu: 'yalnizca X yaz' "
+                                            "kriteri metin olarak yeterli degil - dama gorevinde isci 11 dosya yazdi."},
              "araclar_kapali": {"type": "array", "items": {"type": "string"},
                                 "description": "Bu turda isciden saklanacak arac adlari (orn. [\"play_observe\"]: olcumu denetci yapar, isci olcum-duzeltme dongusune giremez)."},
              "oturum": {"type": "string", "description": "Onceki worker_run'in 'oturum' degeri: isci ayni baglamla devam eder. Bos = yeni oturum."},

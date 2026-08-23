@@ -1,0 +1,51 @@
+{
+ "zaman": "2026-08-23 19:05:12",
+ "gurultu_dosyasi": 30,
+ "A": {
+  "etiket": "A (ara KAPALI)",
+  "sure_s": 93.8,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 14774,
+  "uretim_tok": 1415,
+  "model_cagrisi": 7,
+  "arac_sayisi": 6,
+  "araclar": [
+   "list_files **/*.py",
+   "read_file modul/fiyatlandirma.py",
+   "write_file modul/fiyatlandirma.py",
+   "write_file test_fiyatlandirma.py",
+   "write_file test_fiyatlandirma.py",
+   "read_file modul/fiyatlandirma.py"
+  ],
+  "gizli": "5/6",
+  "dosya": [
+   "modul/fiyatlandirma.py",
+   "test_fiyatlandirma.py"
+  ],
+  "is_id": "20260823-190231-66f21a"
+ },
+ "B": {
+  "etiket": "B (ara ACIK)",
+  "sure_s": 67.7,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 9984,
+  "uretim_tok": 433,
+  "model_cagrisi": 4,
+  "arac_sayisi": 3,
+  "araclar": [
+   "ara ",
+   "read_file modul/fiyatlandirma.py",
+   "write_file modul/fiyatlandirma.py"
+  ],
+  "gizli": "5/6",
+  "dosya": [
+   "modul/fiyatlandirma.py"
+  ],
+  "is_id": "20260823-190404-e52ffd"
+ },
+ "kazanc": {
+  "prompt_tok_fark": 4790,
+  "prompt_tok_oran": 0.676,
+  "sure_oran": 0.722
+ }
+}

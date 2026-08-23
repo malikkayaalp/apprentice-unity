@@ -1,0 +1,128 @@
+{
+ "zaman": "2026-08-23 19:18:34",
+ "gorevler": {
+  "rle": {
+   "zorluk": "1-kolay",
+   "turlar": [
+    {
+     "tur": 1,
+     "sure_s": 179.6,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 39621,
+     "uretim_tok": 3789,
+     "arac": 12,
+     "gizli": "9/9",
+     "hatalar": [],
+     "dosya": [
+      "rle.py",
+      "test_rle.py"
+     ]
+    }
+   ],
+   "oturum": "20260823-191834-58f29d"
+  },
+  "heap": {
+   "zorluk": "2-orta",
+   "turlar": [
+    {
+     "tur": 1,
+     "sure_s": 46.1,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 4449,
+     "uretim_tok": 1081,
+     "arac": 2,
+     "gizli": "9/9",
+     "hatalar": [],
+     "dosya": [
+      "minheap.py"
+     ]
+    }
+   ],
+   "oturum": "20260823-192134-b2520d"
+  },
+  "dijkstra": {
+   "zorluk": "3-orta-zor",
+   "turlar": [
+    {
+     "tur": 1,
+     "sure_s": 46.1,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 4543,
+     "uretim_tok": 1048,
+     "arac": 2,
+     "gizli": "0/1",
+     "hatalar": [
+      "IMPORT HATASI | SyntaxError: unexpected character after line continuation character (<string>, line 1)"
+     ],
+     "dosya": [
+      "yol.py"
+     ]
+    },
+    {
+     "tur": 2,
+     "sure_s": 61.6,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 10883,
+     "uretim_tok": 1490,
+     "arac": 2,
+     "gizli": "0/1",
+     "hatalar": [
+      "IMPORT HATASI | SyntaxError: unexpected character after line continuation character (<string>, line 1)"
+     ],
+     "dosya": [
+      "yol.py"
+     ]
+    }
+   ],
+   "oturum": "20260823-192220-fa3f1d"
+  },
+  "ifade": {
+   "zorluk": "4-zor",
+   "turlar": [
+    {
+     "tur": 1,
+     "sure_s": 121.3,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 9128,
+     "uretim_tok": 2933,
+     "arac": 3,
+     "gizli": "12/12",
+     "hatalar": [],
+     "dosya": [
+      "hesap.py"
+     ]
+    }
+   ],
+   "oturum": "20260823-192408-c4e231"
+  },
+  "dama": {
+   "zorluk": "5-oyun mantigi",
+   "turlar": [
+    {
+     "tur": 1,
+     "sure_s": 336.1,
+     "derleme_durumu": "derlendi",
+     "prompt_tok": 199888,
+     "uretim_tok": 8175,
+     "arac": 26,
+     "gizli": "12/12",
+     "hatalar": [],
+     "dosya": [
+      "dama.py",
+      "test_dama.py",
+      "calistir.bat",
+      "calistir.sh",
+      "test.sh",
+      "run_tests.bat",
+      "run_tests.sh",
+      "test.bat",
+      "test.py",
+      "test_cmd.bat",
+      "test_cmd.sh"
+     ]
+    }
+   ],
+   "oturum": "20260823-192609-61a536"
+  }
+ }
+}

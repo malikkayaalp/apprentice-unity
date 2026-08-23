@@ -94,6 +94,16 @@ def offline() -> bool:
     assert r.get("ok") and r.get("degisiklik") is not False, r
     print("bos yazma korumasi: ok")
 
+    # yazma izin listesi (olculdu: dama gorevinde isci 11 dosya yazdi, 10'u istenmemisti)
+    CR.YAZILABILIR = ["izinli.py"]
+    r = d("write_file", {"path": "izinsiz.bat", "contents": "echo x"})
+    assert "yazma izni yok" in r.get("error", ""), r
+    assert not os.path.exists(os.path.join(home, "izinsiz.bat"))
+    r = d("write_file", {"path": "izinli.py", "contents": "x = 1\n"})
+    assert r.get("ok"), r
+    CR.YAZILABILIR = []
+    print("yazma izin listesi: ok")
+
     # shell
     r = d("run_shell", {"cmd": "git push origin main"})
     assert "reddedildi" in r.get("error", ""), r

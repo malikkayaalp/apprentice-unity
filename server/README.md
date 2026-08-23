@@ -23,6 +23,7 @@ worker_run(gorev, kabul_kriterleri, ortam="code", calisma_dizini?, oturum?, play
 | `play` | bool | ortama özgü ek çalışma-zamanı doğrulaması (eklenti destekliyorsa; vars. false) |
 | `onarim` | int | azami derleme onarım turu (vars. 3) |
 | `dogrulama` | `tam` \| `derleme` | `tam` (vars.): işçi testleri de koşar, ham test çıktısı döner. `derleme`: işçi **yalnızca yazar** — test/shell araçları kapalı, harness test koşmaz, ölçüm dönmez; kodu denetçi okur ve onaylar. Ölçüldü: dönüş ~3000 → **~480 token**, süre 139 → 36 s |
+| `yazilabilir` | string[] | yazma izni verilen dosyaların **tam listesi**; dışına yazma reddedilir. Ölçüldü: "yalnızca X yaz" kriteri metin olarak tutmuyor — dama görevinde işçi 11 dosya yazdı |
 | `araclar_kapali` | string[] | bu turda işçiden saklanacak araçlar (ör. bir ölçüm aracı) — ölçümü denetçi yapar, işçi ölçüm-düzeltme döngüsüne giremez (ölçüldü: talimatla söylenince işçi iki turda yine ölçtü, ~400 s/tur) |
 | `zaman_asimi_s` | number | üst sınır (vars. 1800); aşılırsa işçi durdurulur |
 | `bekle` | bool | `false`: hemen `is_id` ile dön, `worker_status(is_id)` ile yokla. **Cursor için gerekli** (ölçüldü: Cursor'ın araç zaman aşımı ~2.5 dk, bir motor-eklentisi turu 2–8 dk) |

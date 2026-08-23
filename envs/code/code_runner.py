@@ -61,6 +61,10 @@ TEST_ADI = "pytest" if HAS_PYTEST else "unittest"
 # "tam": derleme + test kosulur (varsayilan). "derleme": yalnizca derlenir; isci test kosmaz,
 # olcum uretilmez - dogrulamayi denetci yapar (kucuk donus, kucuk baglam).
 DOGRULAMA = os.environ.get("APPRENTICE_DOGRULAMA", "tam")
+# Yazma izni listesi (denetci verir). OLCULDU: "yalnizca X.py yaz" kriteri islevsel kalitede
+# tutuluyor ama DISIPLINDE tutulmuyor - dama gorevinde 11 dosya yazildi (10'u istenmeyen .bat/.sh).
+# Kriter metni yetmiyor; sinir araca konuluyor.
+YAZILABILIR = [x.strip() for x in os.environ.get("APPRENTICE_YAZILABILIR", "").split(",") if x.strip()]
 
 TEST_SATIRI_TAM = ("- Testleri run_tests ile kosarsin ({test}; test dosyalari test_*.py, "
                    "unittest.TestCase siniflari her iki kosucuda da calisir). Komutlari "
@@ -184,6 +188,9 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
     if name == "write_file":
         p = jail.path(a.get("path", ""))
         rel = os.path.relpath(p, jail.root).replace("\\", "/")   # olaylarda daima goreli yol
+        if YAZILABILIR and rel not in YAZILABILIR:
+            return {"error": "yazma izni yok: %s. Bu iste yalnizca su dosyalar yazilabilir: %s"
+                             % (rel, ", ".join(YAZILABILIR))}
         before = None
         if os.path.isfile(p):
             with open(p, encoding="utf-8", errors="replace") as f:

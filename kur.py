@@ -404,6 +404,9 @@ Dongu, olcumle secildi: cirak yazar -> usta CALISTIRARAK dogrular -> duzeltme bu
      kenar durumlar, hangi girdide hangi hata. Olculdu: sozlesmeli tur 14/14, sozlesmesiz 12/14 -
      cirak hatayi kendisi bulur ama bicim/kenar detayini sen yazmazsan kacirir.
    - ortam "code"; calisma_dizini yazma (workspace koku), gerekirse goreli alt klasor.
+   - Dosya listesi belliyse `yazilabilir: ["a.py","b.py"]` ver: baska dosyaya yazma REDDEDILIR.
+     Olculdu: "yalnizca X yaz" kriteri metin olarak tutmuyor - dama gorevinde isci 11 dosya yazdi
+     (10'u istenmeyen .bat/.sh). Islevsel kriterlere uyuyor ama disiplin kriterine uymuyor.
    - dogrulama="derleme": cirak yalnizca yazar, test/shell kapali (donus ~500 token, ~3x hizli).
      Dogrulama tek komutla BITMEYECEKSE (cok vaka/yineleme) "tam" kullan: cirak testi kendisi kosar.
    - Uzun is: bekle=false + worker_status(is_id).
