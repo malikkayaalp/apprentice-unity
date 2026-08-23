@@ -175,6 +175,51 @@ def _tokenle(metin: str) -> list:
     return out
 
 
+def _kesit(sorgu: str, metin: str, sinir: int = 1200) -> str:
+    """Parcadan donen kesit, sorgu kelimelerinin gectigi bolgenin ETRAFINDAN alinir.
+
+    Olculdu (2026-08-24, html demosu): 60 satirlik parcanin ortasindaki cevap 1200
+    karakterlik bas-kesitinde gorunmuyordu; isci dogru adresi alip yine de dosyayi
+    yeniden okumak zorunda kaliyordu. Kesit hedefe ortalaninca cogu durumda ikinci
+    read_file'a gerek kalmaz. Sozcuksel eslesme yoksa (tamamen anlamsal isabet)
+    bastan kesilir - eski davranis."""
+    if len(metin) <= sinir:
+        return metin
+    sorgu_tok = set(_tokenle(sorgu))
+    satirlar = metin.splitlines()
+
+    def _esle(a: str, b: str) -> bool:
+        # Turkce ek yapisi birebir eslesmeyi bozuyor (gunum/gun, urunu/urunler);
+        # ilk 4 karakter ortak onek sayilir (3 harfli kokler icin 3).
+        k = min(len(a), len(b), 4)
+        return k >= 3 and a[:k] == b[:k]
+
+    def _puan(satir: str) -> int:
+        st = set(_tokenle(satir))
+        return sum(1 for q in sorgu_tok if any(_esle(q, t) for t in st))
+
+    puanlar = [_puan(s) for s in satirlar]
+    if not any(puanlar):
+        return metin[:sinir]
+    merkez = max(range(len(puanlar)), key=lambda i: puanlar[i])
+    bas = son = merkez
+    uzunluk = len(satirlar[merkez])
+    while uzunluk < sinir - 8 and (bas > 0 or son < len(satirlar) - 1):
+        buyudu = False
+        if bas > 0 and uzunluk + len(satirlar[bas - 1]) + 1 <= sinir - 8:
+            bas -= 1; uzunluk += len(satirlar[bas]) + 1; buyudu = True
+        if son < len(satirlar) - 1 and uzunluk + len(satirlar[son + 1]) + 1 <= sinir - 8:
+            son += 1; uzunluk += len(satirlar[son]) + 1; buyudu = True
+        if not buyudu:
+            break
+    kesit = "\n".join(satirlar[bas:son + 1])
+    if bas > 0:
+        kesit = "...\n" + kesit
+    if son < len(satirlar) - 1:
+        kesit += "\n..."
+    return kesit
+
+
 def _bm25_puanla(sorgu: str, parcalar: list, k: int) -> list:
     """Sozcuksel yedek: BM25 (k1=1.5, b=0.75). Gomme yokken de `ara` calissin diye."""
     tok = _tokenle
@@ -220,12 +265,12 @@ def ara(workdir: str, sorgu: str, k: int = TOP_K, embed=None) -> dict:
             return {"durum": durum, "kip": "anlamsal", "sonuclar": [
                 {"yol": p["yol"], "satir": "%d-%d" % (p["bas"], p["son"]),
                  "benzerlik": round(_kosinus(sv, p["vek"]), 3),
-                 "metin": p["metin"][:1200]} for p in puanli]}
+                 "metin": _kesit(sorgu, p["metin"])} for p in puanli]}
         except RuntimeError as e:
             durum = dict(durum, gomme_hatasi=str(e))
     return {"durum": durum,
             "kip": "bm25 (gomme yok - sozcuksel yedek; anlamsal icin: ollama pull bge-m3)",
             "sonuclar": [
                 {"yol": p["yol"], "satir": "%d-%d" % (p["bas"], p["son"]),
-                 "benzerlik": round(s, 3), "metin": p["metin"][:1200]}
+                 "benzerlik": round(s, 3), "metin": _kesit(sorgu, p["metin"])}
                 for s, p in _bm25_puanla(sorgu, parcalar, k)]}

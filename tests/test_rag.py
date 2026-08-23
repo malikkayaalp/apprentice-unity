@@ -102,7 +102,37 @@ def offline() -> bool:
     assert rd["kip"].startswith("bm25") and rd["sonuclar"][0]["yol"] == "kargo.py", rd
     print("bm25 yedegi (sorgu aninda coken gomme): ok")
 
-    # 8) HAFIZA.md sistem istemine girer (code_runner uzerinden)
+    # 8) kesit hedefe ortalanir: cevap parcanin ortasindaysa 1200'luk kesitte GORUNUR
+    work3 = os.path.join(ROOT, ".apprentice_test_home", "rag_kesit")
+    if os.path.isdir(work3):
+        shutil.rmtree(work3)
+    os.makedirs(work3)
+    satirlar = ['<div class="urun uzun-gurultu-satiri-%02d">Urun %d - 100 TL</div>' % (i, i)
+                for i in range(40)]
+    satirlar.insert(30, "<p>Iade suresi 14 gun, urunler faturasiyla birlikte kabul edilir.</p>")
+    with open(os.path.join(work3, "magaza.html"), "w", encoding="utf-8") as f:
+        f.write("\n".join(satirlar))
+    ixk = rag.Indeks(work3, embed=sahte_embed)
+    if os.path.isfile(ixk.yol):
+        os.remove(ixk.yol)
+    rk = rag.ara(work3, "iade suresi kac gun", embed=sahte_embed)
+    m = rk["sonuclar"][0]["metin"]
+    assert "Iade suresi 14 gun" in m, m[:200]         # eski davranista bas-kesiti bunu keserdi
+    assert m.startswith("...") and len(m) <= 1215, (len(m), m[:60])
+    print("kesit hedefe ortalanir: ok")
+
+    # 8b) ekli sorgu da tutar: gunum~gundur, urunu~urunler (ortak onek eslesmesi)
+    rk2 = rag.ara(work3, "urunu geri gondermek istersem kac gunum var", embed=sahte_embed)
+    m2 = rk2["sonuclar"][0]["metin"]
+    assert "Iade suresi 14 gun" in m2, m2[:200]
+    print("kesit ekli (morfolojik) sorguyla: ok")
+
+    # 9) sozcuksel eslesme yoksa kesit bastan (eski davranis, kirilmadi)
+    r_bos = rag._kesit("hicbiryerde gecmeyenkelime", "\n".join(satirlar))
+    assert r_bos == "\n".join(satirlar)[:1200]
+    print("kesit gerileme (eslesme yok): ok")
+
+    # 10) HAFIZA.md sistem istemine girer (code_runner uzerinden)
     import importlib
     CR = importlib.import_module("code_runner")
     with open(os.path.join(work, "HAFIZA.md"), "w", encoding="utf-8") as f:
