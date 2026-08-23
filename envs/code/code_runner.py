@@ -214,7 +214,18 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
             f.write(contents)
         written.append(rel)
         em.emit("write", path=rel, before=before, after=contents)
-        return {"ok": True, "path": rel, "bytes": len(contents.encode("utf-8"))}
+        sonuc = {"ok": True, "path": rel, "bytes": len(contents.encode("utf-8"))}
+        # ANINDA DERLEME KANITI (2026-08-23): "derlendi" bilgisi modelin duracagi anda elinde
+        # olsun diye yazim cevabina konur. Turdan sonraki onarim dongusu yine kosar; bu, modele
+        # "bittin mi?" kararini kanitla verdirmek icin. (Tetris olayi: kanitsiz model ayni
+        # dosyayi 10 kez yazdi - dur sinyali iddiayla degil derleyiciyle gelir.)
+        if rel.endswith(".py"):
+            try:
+                compile(contents, rel, "exec")
+                sonuc["derleme"] = "temiz - bu dosyada yapacak is kalmadiysa tekrar yazma"
+            except SyntaxError as e:
+                sonuc["derleme"] = "HATA %s satir %s: %s" % (rel, e.lineno, e.msg)
+        return sonuc
     if name == "list_files":
         pat = a.get("pattern") or "**/*"
         out = []

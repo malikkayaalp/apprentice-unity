@@ -48,6 +48,7 @@ def offline() -> bool:
     # yaz / oku / listele / write olayi
     r = d("write_file", {"path": "pkg/toplam.py", "contents": "def toplam(a, b):\n    return a + b\n"})
     assert r.get("ok") and written == ["pkg/toplam.py"]
+    assert r.get("derleme", "").startswith("temiz"), r   # aninda derleme kaniti cevapta
     assert any(e["type"] == "write" and e["before"] is None for e in em.ev)
     r = d("read_file", {"path": "pkg/toplam.py"})
     assert "def toplam" in r["contents"]
@@ -59,7 +60,8 @@ def offline() -> bool:
     assert CR.compile_errors(jail, written) == []
     assert CR.test_errors(jail) == []
     # bozuk py -> derleme hatasi
-    d("write_file", {"path": "bozuk.py", "contents": "def (:\n"})
+    r = d("write_file", {"path": "bozuk.py", "contents": "def (:\n"})
+    assert r.get("derleme", "").startswith("HATA"), r    # hata da aninda cevapta
     errs = CR.compile_errors(jail, written)
     assert errs and "bozuk.py" in errs[0], errs
     os.remove(os.path.join(home, "bozuk.py"))
