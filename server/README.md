@@ -125,7 +125,9 @@ dosya > şablon > kod).
 `code` ortamı ayrıca: **proje hafızası** — workspace kökünde `HAFIZA.md` varsa içeriği (3000 karaktere kadar)
 işçinin sistem istemine eklenir; ustanın kalıcı dersleri yazdığı yerdir. **`ara` araci** — çalışma dizinini
 parçalayıp bge-m3 ile gömer (`ollama pull bge-m3`), indeks `~/.apprentice/rag/` altında, dosya değişince
-yalnızca değişen yeniden gömülür; işçi "neyi okuyacağını" körlemesine okumadan bulur.
+yalnızca değişen yeniden gömülür; işçi "neyi okuyacağını" körlemesine okumadan bulur. bge-m3 yoksa
+`ara` sözcüksel yedeğe (BM25) düşer — sonuç yine döner, cevaptaki `kip` alanı hangi yolun kullanıldığını
+söyler; gömme mümkün olunca eksik parçalar kendiliğinden gömülür ve anlamsala geri dönülür.
 | `fake` | — | — | `envs/fake/fake_runner.py` (olay şemasını taklit eder, model gerektirmez) |
 | eklentiler | ortamın kendi seti | ortamın kendi doğrulayıcısı (ör. derleyici + play) | `envs/<ad>/` — `env.json` ile tanımlanır, klonlanınca belirir |
 

@@ -70,7 +70,39 @@ def offline() -> bool:
     assert r4["durum"]["silinen"] == 1 and all(x["yol"] != "uzun.py" for x in r4["sonuclar"])
     print("silme: ok")
 
-    # 5) HAFIZA.md sistem istemine girer (code_runner uzerinden)
+    # 5) BM25 yedegi: gomme hic yapilamiyorsa arac yine calisir ve dogru dosyayi bulur
+    def bozuk_embed(metinler):
+        raise RuntimeError("gomme yapilamadi (test)")
+    work2 = os.path.join(ROOT, ".apprentice_test_home", "rag_bm25")
+    if os.path.isdir(work2):
+        shutil.rmtree(work2)
+    os.makedirs(work2)
+    with open(os.path.join(work2, "odeme.py"), "w", encoding="utf-8") as f:
+        f.write("def kupon_indirimi_uygula(tutar, kod):\n    # kupon indirimi burada\n    return tutar\n")
+    with open(os.path.join(work2, "kargo.py"), "w", encoding="utf-8") as f:
+        f.write("def kargo_ucreti_hesapla(agirlik):\n    return agirlik * 2\n")
+    ixb = rag.Indeks(work2, embed=bozuk_embed)
+    if os.path.isfile(ixb.yol):
+        os.remove(ixb.yol)
+    rb = rag.ara(work2, "kupon indirimi", embed=bozuk_embed)
+    assert rb["kip"].startswith("bm25"), rb.get("kip")
+    assert rb["sonuclar"] and rb["sonuclar"][0]["yol"] == "odeme.py", rb["sonuclar"]
+    assert rb["durum"]["gomme_hatasi"], rb["durum"]
+    print("bm25 yedegi (gomme yok): ok")
+
+    # 6) gomme geri gelince eksik parcalar kendiliginden gomulur, anlamsala donulur
+    rc = rag.ara(work2, "kupon indirimi", embed=sahte_embed)
+    assert rc["kip"] == "anlamsal", rc.get("kip")
+    assert rc["durum"]["gomulen"] >= 2, rc["durum"]     # vek'siz parcalar yeniden islendi
+    assert rc["sonuclar"][0]["yol"] == "odeme.py"
+    print("bm25 -> anlamsal kendiliginden donus: ok")
+
+    # 7) sorgu aninda gomme coken indeks de bm25'e duser (indeks gomulu olsa bile)
+    rd = rag.ara(work2, "kargo ucreti", embed=bozuk_embed)
+    assert rd["kip"].startswith("bm25") and rd["sonuclar"][0]["yol"] == "kargo.py", rd
+    print("bm25 yedegi (sorgu aninda coken gomme): ok")
+
+    # 8) HAFIZA.md sistem istemine girer (code_runner uzerinden)
     import importlib
     CR = importlib.import_module("code_runner")
     with open(os.path.join(work, "HAFIZA.md"), "w", encoding="utf-8") as f:

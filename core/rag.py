@@ -7,14 +7,17 @@ patlatir (olculdu: 6 kucuk goreve 66k prompt tokeni, cogu dosya icerigi). `ara` 
 Tasarim:
   - Indeks HOME/rag/<workdir-ozeti>.json altinda durur (kullanicinin projesi kirletilmez).
   - Dosya degisince (mtime+boyut) yalnizca o dosya yeniden gomulur.
-  - Gomme Ollama /api/embed + bge-m3 (config: rag.embed_model). Ollama kapaliysa `ara`
-    net bir hata dondurur; hicbir sey Ollama'yi kendiliginden BASLATMAZ.
+  - Gomme Ollama /api/embed + bge-m3 (config: rag.embed_model). Gomme yapilamiyorsa
+    (Ollama kapali / bge-m3 cekilmemis) `ara` BM25 sozcuksel yedege duser: sonuc yine
+    doner, cevapta "kip" alani hangi yolun kullanildigini soyler. Gomme sonradan
+    mumkun olursa eksik parcalar kendiliginden gomulur ve anlamsala geri donulur.
+    Hicbir sey Ollama'yi kendiliginden BASLATMAZ.
   - Saf stdlib; kosinus benzerligi Python'da. ~2-3k parca icin yeterli (olcek buyuyunce
     numpy'a gecilebilir ama once gerek oldugu olculmeli).
   - embed islevi enjekte edilebilir: testler sahte gommeyle calisir, GPU gerektirmez.
 """
 from __future__ import annotations
-import hashlib, json, math, os, urllib.request
+import collections, hashlib, json, math, os, re, urllib.request
 
 from core import config as CFG
 
@@ -115,6 +118,11 @@ class Indeks:
         eski = self.veri.get("dosyalar", {})
         degisen = [r for r, imza in mevcut.items() if eski.get(r) != imza]
         silinen = [r for r in eski if r not in mevcut]
+        # onceki turda gomme yapilamamis parcalar (vek'siz) yeniden denenir
+        eksikli = sorted({p["yol"] for p in self.veri.get("parcalar", [])
+                          if "vek" not in p and p["yol"] in mevcut})
+        degisen = sorted(set(degisen) | set(eksikli))
+        gomme_hatasi = ""
         if degisen or silinen:
             self.veri["parcalar"] = [p for p in self.veri.get("parcalar", [])
                                      if p["yol"] not in degisen and p["yol"] not in silinen]
@@ -125,10 +133,15 @@ class Indeks:
                         yeni_parcalar.extend(_parcala(f.read(), rel))
                 except OSError:
                     continue
-            # gomme toplu yapilir (tek istek cok parca)
+            # gomme toplu yapilir (tek istek cok parca); yapilamazsa parcalar vek'siz
+            # saklanir -> `ara` BM25 yedegine duser, sonraki basarili turda gomulur.
             for i in range(0, len(yeni_parcalar), 32):
                 grup = yeni_parcalar[i:i + 32]
-                vekler = self.embed([p["metin"] for p in grup])
+                try:
+                    vekler = self.embed([p["metin"] for p in grup])
+                except RuntimeError as e:
+                    gomme_hatasi = str(e)
+                    break
                 for p, v in zip(grup, vekler):
                     p["vek"] = [round(x, 5) for x in v]
             self.veri["parcalar"].extend(yeni_parcalar)
@@ -137,18 +150,82 @@ class Indeks:
             with open(self.yol, "w", encoding="utf-8") as f:
                 json.dump(self.veri, f)
         return {"dosya": len(mevcut), "parca": len(self.veri["parcalar"]),
-                "gomulen": len(degisen), "silinen": len(silinen)}
+                "gomulen": len(degisen), "silinen": len(silinen),
+                "gomme_hatasi": gomme_hatasi}
+
+
+_TOKEN = re.compile(r"[0-9a-zA-Z_ÇçĞğİıÖöŞşÜü]+")
+_ALT_TOKEN = re.compile(r"[A-ZÇĞİÖŞÜ]+(?![a-zçğıöşü])|[A-ZÇĞİÖŞÜ]?[a-zçğıöşü0-9]+")
+
+
+def _tokenle(metin: str) -> list:
+    """Kod icin tokenler: tanimlayicilar butun halleriyle VE alt parcalariyla girer
+    (kargo_ucreti_hesapla -> kargo, ucreti, hesapla; KargoUcreti -> kargo, ucreti).
+    Yoksa dogal dilli sorgu snake_case tanimlayiciyi hic tutturamiyor."""
+    out = []
+    for t in _TOKEN.findall(metin):
+        tl = t.lower()
+        if len(tl) > 1:
+            out.append(tl)
+        if "_" in t or any(c.isupper() for c in t[1:]):
+            for p in _ALT_TOKEN.findall(t.replace("_", " ")):
+                pl = p.lower()
+                if len(pl) > 1 and pl != tl:
+                    out.append(pl)
+    return out
+
+
+def _bm25_puanla(sorgu: str, parcalar: list, k: int) -> list:
+    """Sozcuksel yedek: BM25 (k1=1.5, b=0.75). Gomme yokken de `ara` calissin diye."""
+    tok = _tokenle
+    dokumanlar = [tok(p["metin"]) for p in parcalar]
+    df = collections.Counter()
+    for d in dokumanlar:
+        df.update(set(d))
+    n = len(dokumanlar)
+    ort = sum(len(d) for d in dokumanlar) / max(1, n)
+    sorgu_tok = tok(sorgu)
+    puanli = []
+    for p, d in zip(parcalar, dokumanlar):
+        tf = collections.Counter(d)
+        s = 0.0
+        for t in sorgu_tok:
+            f = tf.get(t, 0)
+            if not f:
+                continue
+            idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
+            s += idf * f * 2.5 / (f + 1.5 * (0.25 + 0.75 * len(d) / (ort or 1)))
+        if s > 0:
+            puanli.append((s, p))
+    puanli.sort(key=lambda cift: -cift[0])
+    return puanli[:max(1, k)]
 
 
 def ara(workdir: str, sorgu: str, k: int = TOP_K, embed=None) -> dict:
-    """Sorguya en yakin k parca. Ilk cagri indeksi kurar (buyuk depoda dakikalar surebilir)."""
+    """Sorguya en yakin k parca. Ilk cagri indeksi kurar (buyuk depoda dakikalar surebilir).
+
+    Anlamsal arama (bge-m3) esas yoldur; gomme yapilamiyorsa BM25 sozcuksel yedege duser
+    ve cevaptaki "kip" alani bunu soyler - arac hic olmamasindan iyidir (Q3CNFU dersi:
+    arac varligi tek basina -%32 prompt kazandirdi, yedek bu kazanci korur).
+    """
     ix = Indeks(workdir, embed=embed)
     durum = ix.guncelle()
     if not ix.veri["parcalar"]:
         return {"durum": durum, "sonuclar": [], "not": "indekslenecek dosya yok"}
-    sv = (embed or embed_ollama)([sorgu])[0]
-    puanli = sorted(ix.veri["parcalar"], key=lambda p: -_kosinus(sv, p["vek"]))[:max(1, k)]
-    return {"durum": durum, "sonuclar": [
-        {"yol": p["yol"], "satir": "%d-%d" % (p["bas"], p["son"]),
-         "benzerlik": round(_kosinus(sv, p["vek"]), 3),
-         "metin": p["metin"][:1200]} for p in puanli]}
+    parcalar = ix.veri["parcalar"]
+    if all("vek" in p for p in parcalar):
+        try:
+            sv = (embed or embed_ollama)([sorgu])[0]
+            puanli = sorted(parcalar, key=lambda p: -_kosinus(sv, p["vek"]))[:max(1, k)]
+            return {"durum": durum, "kip": "anlamsal", "sonuclar": [
+                {"yol": p["yol"], "satir": "%d-%d" % (p["bas"], p["son"]),
+                 "benzerlik": round(_kosinus(sv, p["vek"]), 3),
+                 "metin": p["metin"][:1200]} for p in puanli]}
+        except RuntimeError as e:
+            durum = dict(durum, gomme_hatasi=str(e))
+    return {"durum": durum,
+            "kip": "bm25 (gomme yok - sozcuksel yedek; anlamsal icin: ollama pull bge-m3)",
+            "sonuclar": [
+                {"yol": p["yol"], "satir": "%d-%d" % (p["bas"], p["son"]),
+                 "benzerlik": round(s, 3), "metin": p["metin"][:1200]}
+                for s, p in _bm25_puanla(sorgu, parcalar, k)]}

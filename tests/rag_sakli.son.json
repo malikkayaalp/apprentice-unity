@@ -1,0 +1,54 @@
+{
+ "zaman": "2026-08-23 22:36:30",
+ "gurultu_dosyasi": 120,
+ "A": {
+  "etiket": "A (ara KAPALI)",
+  "sure_s": 82.3,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 41600,
+  "uretim_tok": 391,
+  "model_cagrisi": 12,
+  "arac_sayisi": 12,
+  "araclar": [
+   "list_files **/*.py",
+   "read_file modul/modul_00.py",
+   "read_file modul/modul_01.py",
+   "read_file modul/modul_02.py",
+   "read_file modul/modul_03.py",
+   "read_file modul/modul_04.py",
+   "read_file modul/modul_05.py",
+   "read_file modul/modul_06.py",
+   "read_file modul/modul_07.py",
+   "read_file modul/modul_08.py",
+   "read_file modul/modul_09.py",
+   "read_file modul/modul_10.py"
+  ],
+  "gizli": "5/6",
+  "dosya": [],
+  "is_id": "20260823-223347-299834"
+ },
+ "B": {
+  "etiket": "B (ara ACIK)",
+  "sure_s": 79.7,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 11234,
+  "uretim_tok": 724,
+  "model_cagrisi": 4,
+  "arac_sayisi": 3,
+  "araclar": [
+   "ara ",
+   "read_file modul/modul_61.py",
+   "write_file modul/modul_61.py"
+  ],
+  "gizli": "6/6",
+  "dosya": [
+   "modul/modul_61.py"
+  ],
+  "is_id": "20260823-223510-53edbc"
+ },
+ "kazanc": {
+  "prompt_tok_fark": 30366,
+  "prompt_tok_oran": 0.27,
+  "sure_oran": 0.968
+ }
+}

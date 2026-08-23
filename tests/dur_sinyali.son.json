@@ -1,0 +1,25 @@
+{
+ "zaman": "2026-08-23 22:19:33",
+ "sure_s": 95.3,
+ "derleme_durumu": "derlendi",
+ "prompt_tok": 8059,
+ "uretim_tok": 2526,
+ "yazim_sayilari": {
+  "requirements.txt": 1,
+  "tetris.py": 1
+ },
+ "ayni_dosyaya_en_cok": 1,
+ "ozet_var": true,
+ "hatalar": [],
+ "araclar": [
+  "list_files **/*",
+  "write_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\dur_sinyali\\requirements.txt",
+  "write_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\dur_sinyali\\tetris.py"
+ ],
+ "is_id": "20260823-221758-3f0201",
+ "kiyas_2026_08_23_kazasi": {
+  "ayni_dosyaya": 10,
+  "sure_s": 880,
+  "ozet_var": false
+ }
+}
