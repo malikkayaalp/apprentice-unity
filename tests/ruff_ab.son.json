@@ -1,0 +1,23 @@
+{
+ "zaman": "2026-08-24 01:19:21",
+ "A_rufsuz": {
+  "ruff": false,
+  "sure_s": 54.2,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 4198,
+  "uretim_tok": 491,
+  "gizli": "1/5",
+  "tohum_duzeldi": false,
+  "cikti": "HATA stok_ekle CALISIR (tohum hata)  NameError: name 'kaydet_log' is not defined\nHATA stok_dus temel  NameError: name 'kaydet_log' is not defined\nHATA stok_dus sifirda cikar  NameError: name 'kaydet_log' is not defined\nOK   yetersiz stok ValueError\nHATA girdi degismez  NameError: name 'kaydet_log' is not defined\nPUAN 1/5\n"
+ },
+ "B_ruflu": {
+  "ruff": true,
+  "sure_s": 269.6,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 6676,
+  "uretim_tok": 6593,
+  "gizli": "4/5",
+  "tohum_duzeldi": false,
+  "cikti": "HATA stok_ekle CALISIR (tohum hata)  NameError: name 'kaydet_log' is not defined\nOK   stok_dus temel\nOK   stok_dus sifirda cikar\nOK   yetersiz stok ValueError\nOK   girdi degismez\nPUAN 4/5\n"
+ }
+}

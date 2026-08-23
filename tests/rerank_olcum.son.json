@@ -1,0 +1,38 @@
+{
+ "zaman": "2026-08-24 01:30:55",
+ "sonuclar": [
+  {
+   "sorgu": "kupon indirimi nerede uygulaniyor",
+   "hedef_sira": 1,
+   "birinci": "kupon_indirimi_uygula"
+  },
+  {
+   "sorgu": "sepet tutarindan kupon yuzdesi nasil dusuluyor",
+   "hedef_sira": 1,
+   "birinci": "kupon_indirimi_uygula"
+  },
+  {
+   "sorgu": "urunu indirimli fiyata ceviren fonksiyon",
+   "hedef_sira": 2,
+   "birinci": "fiyat_guncelle"
+  },
+  {
+   "sorgu": "yuzdelik indirim uygulanan yer",
+   "hedef_sira": 1,
+   "birinci": "kupon_indirimi_uygula"
+  },
+  {
+   "sorgu": "kuponun tutari azalttigi kod",
+   "hedef_sira": 1,
+   "birinci": "kupon_indirimi_uygula"
+  },
+  {
+   "sorgu": "indirim uygulama mantigi hangi fonksiyonda",
+   "hedef_sira": 1,
+   "birinci": "kupon_indirimi_uygula"
+  }
+ ],
+ "top1": "5/6",
+ "top3": "6/6",
+ "karar": "reranker GEREKSIZ: bge-m3 tek basina yeterli"
+}

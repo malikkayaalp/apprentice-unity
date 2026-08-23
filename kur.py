@@ -15,8 +15,9 @@ Adimlar:
   3  Model var mi, yoksa indir (ilerleme yuzdesiyle)
   4  IDE'ler: kurulu olan her IDE'nin MCP ayarina "apprentice" girdisi (diger girdilere dokunmaz)
      Claude Code: depodaki .mcp.json zaten yeterli
-  5  Oz-test: sunucuyla el sikisma + fake ortamda bir tur (model gerekmez)
-  6  (istege bagli) num_batch olcumu -> apprentice.config.json
+  5  Ruff (istege bagli): yazim-ani F-sinifi kanit icin; kurulamazsa is surer
+  6  Oz-test: sunucuyla el sikisma + fake ortamda bir tur (model gerekmez)
+  7  (istege bagli) num_batch olcumu -> apprentice.config.json
 """
 from __future__ import annotations
 import argparse, json, os, platform, shutil, subprocess, sys, time, urllib.request, urllib.error
@@ -430,7 +431,14 @@ Dongu, olcumle secildi: cirak yazar -> usta CALISTIRARAK dogrular -> duzeltme bu
    Olculdu: dosya adini GOREVDE verebiliyorsan ara gereksiz (list_files+read_file daha ucuz);
    veremiyorsan (hedefin yerini sen de bilmiyorsan) ara SART - arasiz isci 120 dosyayi sirayla
    okumaya kalkip adim sinirinda hic yazamadan coktu (41.6k vs 11.2k token).
-6) En fazla 4 tur. Bitince raporla: tur sayisi, sure, her kriter NASIL dogrulandi (hangi komut/cikti).
+   Alternatif: worker_run(harita=true) sembol haritasini sistem istemine koyar - olculdu (120
+   dosya): ara 11.2k tok/83s, harita 19.4k tok/51s, ikisi 30.9k (asla birlikte acma). Harita
+   her model cagrisinda yeniden odenir ve depoyla buyur: varsayilan ara, bge-m3 yoksa harita.
+6) RUFF - donen raporda `ruff_uyarilari` varsa (tanimsiz isim vb: derlenir ama calisirken
+   patlar) degerlendir; gercekse somut teshisle duzelttir. Olculdu: isci uyariyla YENI kodu
+   temiz yaziyor (bulasma 1/5 -> 4/5 onlendi) ama MEVCUT hatayi "davranisi koru" diye
+   birakiyor - o karar senin.
+7) En fazla 4 tur. Bitince raporla: tur sayisi, sure, her kriter NASIL dogrulandi (hangi komut/cikti).
 """
 
 
@@ -479,9 +487,17 @@ def main() -> int:
     adim(4, "IDE'ler")
     sonuc.append(kontrol_ideler(a.ide))
     mcp_json_guncelle()
-    adim(5, "Oz-test");       sonuc.append(oz_test())
+    adim(5, "Ruff (istege bagli)")
+    # F-sinifi yazim-ani kaniti icin; yoksa sistem yine calisir (sessiz atlanir).
+    if DEGISTIR:
+        py = sistem_python() or sys.executable
+        r = subprocess.run([py, "-m", "ruff", "--version"], capture_output=True)
+        if r.returncode != 0:
+            r = subprocess.run([py, "-m", "pip", "install", "-q", "ruff"], capture_output=True)
+        log("  ruff: %s" % ("hazir" if r.returncode == 0 else "kurulamadi (istege bagli, is surer)"))
+    adim(6, "Oz-test");       sonuc.append(oz_test())
     if a.olc and all(sonuc[:3]):
-        adim(6, "num_batch olcumu (2-3 dk)")
+        adim(7, "num_batch olcumu (2-3 dk)")
         r = subprocess.run([sistem_python() or sys.executable, os.path.join(ROOT, "core", "olcum.py"), "--yaz"])
         sonuc.append(r.returncode == 0)
 

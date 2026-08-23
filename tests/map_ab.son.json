@@ -1,0 +1,53 @@
+{
+ "zaman": "2026-08-24 01:26:26",
+ "A_ara": {
+  "etiket": "A_ara",
+  "sure_s": 82.8,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 11192,
+  "uretim_tok": 718,
+  "arac": 3,
+  "araclar": [
+   "ara ",
+   "read_file modul/modul_61.py",
+   "write_file modul/modul_61.py"
+  ],
+  "gizli": "6/6",
+  "dosya": [
+   "modul/modul_61.py"
+  ]
+ },
+ "B_harita": {
+  "etiket": "B_harita",
+  "sure_s": 51.1,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 19441,
+  "uretim_tok": 802,
+  "arac": 2,
+  "araclar": [
+   "read_file modul/modul_61.py",
+   "write_file modul/modul_61.py"
+  ],
+  "gizli": "6/6",
+  "dosya": [
+   "modul/modul_61.py"
+  ]
+ },
+ "C_ikisi": {
+  "etiket": "C_ikisi",
+  "sure_s": 95.2,
+  "derleme_durumu": "derlendi",
+  "prompt_tok": 30865,
+  "uretim_tok": 677,
+  "arac": 3,
+  "araclar": [
+   "ara ",
+   "read_file modul/modul_61.py",
+   "write_file modul/modul_61.py"
+  ],
+  "gizli": "6/6",
+  "dosya": [
+   "modul/modul_61.py"
+  ]
+ }
+}

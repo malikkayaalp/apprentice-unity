@@ -1,0 +1,41 @@
+{
+ "zaman": "2026-08-24",
+ "yontem": "kisa yol: uzun prompt + 30 tok uretim + parola geri cagirma",
+ "kollar": [
+  {
+   "etiket": "A 64k/50k (temiz)",
+   "num_ctx": 65536,
+   "prompt_tok": 50050,
+   "pp_tps": 599.5,
+   "tg_tps": 26.4,
+   "parola": true,
+   "sure_s": 121.6
+  },
+  {
+   "etiket": "B 128k/50k",
+   "num_ctx": 131072,
+   "prompt_tok": 50056,
+   "pp_tps": 570.2,
+   "tg_tps": 26.6,
+   "parola": true,
+   "sure_s": 112.2
+  },
+  {
+   "etiket": "C 128k/100k",
+   "num_ctx": 131072,
+   "prompt_tok": 100056,
+   "pp_tps": "onbellekli (ilk 50k cache)",
+   "tg_tps": 27.7,
+   "parola": true,
+   "sure_s": 74.5
+  }
+ ],
+ "vram": {
+  "65536": "14946 MiB",
+  "131072": "14966 MiB"
+ },
+ "notlar": [
+  "yeni Ollama pencere asiminda sessiz kirpma YOK - acik 400 hatasi",
+  "karar: varsayilan num_ctx 131072'ye cekildi (olculebilir bedel yok)"
+ ]
+}

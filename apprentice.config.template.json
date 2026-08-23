@@ -15,11 +15,11 @@
   },
   "makine": {
     "_not": "BU MAKINEYE OZEL. Baska donanimda yeniden olculmeli - kopyalanmamali.",
-    "num_ctx": 65536,
+    "num_ctx": 131072,
     "num_batch": 4096,
     "olculdugu_gpu": "",
     "ilk_calistirmada_olc": true,
-    "_olcum_ctx": "32768 -> 65536: yavaslama YOK (28.0 -> 28.9 tok/s, GPU payi %28 sabit). Sinir asilirsa Ollama prompt'u SESSIZCE yariya keser ve model kesik parcadan emin sekilde uydurur.",
+    "_olcum_ctx": "65536 -> 131072 olculdu (2026-08-24, kisa yol: 50k/100k tok prompt + 30 tok uretim + parola geri cagirma): uretim 26.4 vs 26.6 tok/s (fark yok), prefill 599 vs 570 tok/s (-%5), VRAM 14.9 GB AYNI, 100k derinlikte parola hatirlandi. Yeni Ollama pencere asimini SESSIZCE KIRPMIYOR, 400 hatasi donduruyor - eski uyari bayatladi.",
     "_olcum_batch": "16.6k tokenlik promptla: 512=189 t/s, 1024=320, 2048=520, 4096=730 (+%285). VRAM harcar - kucuk kartta sigmayabilir, o yuzden ilk calistirmada olculur. DIKKAT: kisa promptla olcum yaniltir."
   },
   "sampling": {

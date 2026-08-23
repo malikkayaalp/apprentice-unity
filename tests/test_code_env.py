@@ -62,6 +62,15 @@ def offline() -> bool:
     # bozuk py -> derleme hatasi
     r = d("write_file", {"path": "bozuk.py", "contents": "def (:\n"})
     assert r.get("derleme", "").startswith("HATA"), r    # hata da aninda cevapta
+
+    # ruff kaniti: derlenen ama calisirken patlayacak kod (tanimsiz isim) yazim aninda yakalanir
+    r = d("write_file", {"path": "ruflu.py", "contents": "def f():\n    return tanimsiz_isim + 1\n"})
+    assert r.get("derleme", "").startswith("temiz"), r   # compile() bunu GORMEZ
+    assert any("F821" in u for u in r.get("ruff", [])), r    # ruff gorur
+    r = d("write_file", {"path": "temiz2.py", "contents": "def f(x):\n    return x + 1\n"})
+    assert not r.get("ruff"), r                          # temiz dosyada ruff alani hic yok
+    for ad in ("ruflu.py", "temiz2.py"):
+        os.remove(os.path.join(home, ad)); written.remove(ad)
     errs = CR.compile_errors(jail, written)
     assert errs and "bozuk.py" in errs[0], errs
     os.remove(os.path.join(home, "bozuk.py"))

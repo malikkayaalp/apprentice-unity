@@ -225,6 +225,13 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
                 sonuc["derleme"] = "temiz - bu dosyada yapacak is kalmadiysa tekrar yazma"
             except SyntaxError as e:
                 sonuc["derleme"] = "HATA %s satir %s: %s" % (rel, e.lineno, e.msg)
+            # RUFF KANITI (2026-08-24): compile() yalniz sozdizimi gorur; F-sinifi hatalar
+            # (tanimsiz isim, kullanilmayan/eksik import) derlenir ama calisirken patlar.
+            # ruff bunlari milisaniyede "dosya:satir: kod mesaj" formatinda verir - isciye
+            # giden sinyal hata-izi kivaminda kalir. Yoksa/patlarsa sessizce atlanir.
+            uyarilar = ruff_uyarilari(jail, rel)
+            if uyarilar:
+                sonuc["ruff"] = uyarilar
         return sonuc
     if name == "list_files":
         pat = a.get("pattern") or "**/*"
@@ -284,6 +291,33 @@ def _test_cmd(args: str) -> list:
 
 
 # ----------------------------------------------------------------- dogrulayici
+RUFF_KAPALI = os.environ.get("APPRENTICE_RUFF", "1") == "0"     # olcum icin kapatilabilir
+
+
+def ruff_uyarilari(jail: Jail, rel: str, sinir: int = 8) -> list:
+    """Yazilan dosyada F-sinifi (pyflakes) + E9 bulgulari. ruff yoksa bos doner.
+
+    Yalniz F ve E9 secilir: uslup kurallari (E/W geri kalani) bilerek DISARIDA -
+    olculdu: uslup geri bildirimi modele islemiyor, gurultu olarak baglami sisirir.
+    """
+    if RUFF_KAPALI:
+        return []
+    try:
+        r = subprocess.run([sys.executable, "-m", "ruff", "check", "--select", "F,E9",
+                            "--output-format", "concise", "--no-cache", rel],
+                           cwd=jail.root, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=20)
+    except Exception:                                            # noqa: BLE001 - ruff yok/patladi
+        return []
+    if r.returncode not in (0, 1):                               # 2 = kullanim hatasi
+        return []
+    out = [s.strip() for s in (r.stdout or "").splitlines()
+           if s.strip() and not s.startswith(("Found ", "All checks passed"))]
+    if len(out) > sinir:
+        out = out[:sinir] + ["... ve %d uyari daha" % (len(out) - sinir)]
+    return out
+
+
 def compile_errors(jail: Jail, written: list) -> list:
     errs = []
     for rel in dict.fromkeys(written):
@@ -429,6 +463,16 @@ def main() -> int:
                 test_satiri=(TEST_SATIRI_TAM.format(test=TEST_ADI) if DOGRULAMA == "tam" else TEST_SATIRI_DERLEME))
             if hafiza:
                 sistem += "\n\nPROJE HAFIZASI (bu projenin kurallari ve gecmis dersleri; UY):\n" + hafiza
+            # PROJE HARITASI (2026-08-24, OpenMemory'nin MAP fikri): hedefin YERI bilinmeyen
+            # iste isci adressiz kaliyordu (olculdu: 120 dosyayi sirayla okuyup coktu).
+            # Harita "dosya -> semboller" adresini sifir sorguyla verir; denetci acar (harita=true).
+            if os.environ.get("APPRENTICE_HARITA") == "1":
+                try:
+                    from core import harita as HARITA
+                    sistem += "\n\n" + HARITA.uret(jail.root)[:16000] + \
+                              "\nHaritadaki adresi kullan: once ilgili dosyayi read_file ile oku."
+                except Exception as e:                           # noqa: BLE001 - harita cokse is surer
+                    em.emit("system", subtype="harita_hatasi", error=str(e)[:200])
             msgs = [{"role": "system", "content": sistem}]
         r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools)
         save_session(a.session_dir, a.session, msgs, a.model)
@@ -437,9 +481,16 @@ def main() -> int:
         errs = list(r["errors"])
         if r.get("error"):
             errs.append("model dongusu: %s" % r["error"])
+        # Ruff bulgulari USTAYA da gider: olculdu (2026-08-24, ruff_ab) - isci uyariyla yeni
+        # kodu temiz yaziyor ama MEVCUT tohum hataya "davranisi koru" diye dokunmuyor; o karar
+        # ustanin. Hata degil uyari olarak ayri alanda doner, derleme_durumu'nu etkilemez.
+        ruff_rapor = []
+        for rel in dict.fromkeys(written):
+            if rel.endswith(".py"):
+                ruff_rapor += ruff_uyarilari(jail, rel)
         em.emit("result", ok=not errs, errors=[e[:600] for e in errs[:5]], rounds=r["rounds"],
                 wall=round(r["wall"], 1), written=list(dict.fromkeys(written)), play=None,
-                kullanim=r.get("kullanim"))
+                kullanim=r.get("kullanim"), ruff=ruff_rapor[:12] or None)
         code = 0 if not errs else 2
     except Exception as e:  # noqa: BLE001
         em.emit("error", message=("%s: %s" % (type(e).__name__, e))[:300])

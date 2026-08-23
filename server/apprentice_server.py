@@ -95,9 +95,11 @@ def _diff_stat(before: str | None, after: str) -> tuple[int, int]:
 class Job:
     def __init__(self, ortam: str, gorev: str, kriterler: list, oturum: str,
                  play: bool, onarim: int, model: str, url: str, workdir: str = "",
-                 kapali: list | None = None, dogrulama: str = "tam", yazilabilir: list | None = None):
+                 kapali: list | None = None, dogrulama: str = "tam", yazilabilir: list | None = None,
+                 harita: bool = False):
         self.workdir = workdir
         self.dogrulama = dogrulama
+        self.harita = harita
         self.yazilabilir = [str(x).strip() for x in (yazilabilir or []) if str(x).strip()]
         self.kapali = [str(k) for k in (kapali or []) if str(k).strip()]
         self.id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
@@ -145,6 +147,8 @@ class Job:
             env["APPRENTICE_DOGRULAMA"] = self.dogrulama
         if self.yazilabilir:
             env["APPRENTICE_YAZILABILIR"] = ",".join(self.yazilabilir)
+        if self.harita:
+            env["APPRENTICE_HARITA"] = "1"
         self.stderr_f = open(os.path.join(self.dir, "stderr.txt"), "w", encoding="utf-8")
         # stdin/stdout=DEVNULL SART: ikisi de MCP kanali. Olculdu: stdin miras alininca
         # cocuk Windows'ta ilk satirini bile yazmadan takildi (yalniz sunucu icinde).
@@ -229,6 +233,9 @@ class Job:
                 rep["play"] = e.get("play")
                 if e.get("kullanim"):
                     rep["kullanim"] = e["kullanim"]     # token/sure: Ollama'nin kendi sayaci
+                if e.get("ruff"):
+                    # uyaridir, hata degil: derleme_durumu'na dokunmaz; karari denetci verir
+                    rep["ruff_uyarilari"] = e["ruff"]
                 if e.get("play") and e["play"].get("hatalar"):
                     rep["hatalar"].extend("calisma zamani: " + h for h in e["play"]["hatalar"])
             elif t == "error":
@@ -422,7 +429,7 @@ def tool_worker_run(a: dict) -> dict:
               config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model"),
               _kopru_url(ortam), workdir,
               list(a.get("araclar_kapali") or []) + kapali_ek, dogrulama,
-              a.get("yazilabilir") or [])
+              a.get("yazilabilir") or [], bool(a.get("harita", False)))
     JOBS[job.id] = job
     rid = getattr(_CUR_REQ, "id", None)
     if rid is not None:
@@ -494,6 +501,10 @@ TOOLS = [
                            "description": "tam: isci testleri de kosar, ham test ciktisi doner (buyuk donus). "
                                           "derleme: isci YALNIZCA yazar - test/shell araclari kapali, harness test "
                                           "kosmaz, olcum donmez; kodu SEN okuyup onaylarsin ya da hatasini soylersin."},
+             "harita": {"type": "boolean", "default": False,
+                        "description": "true: calisma dizininin sembol haritasi (dosya -> fonksiyon/sinif) "
+                                       "iscinin sistem istemine eklenir. Hedef dosyanin YERINI bilmedigin "
+                                       "iste ise yarar; kucuk/adresli iste harita baglami bosuna sisirir."},
              "yazilabilir": {"type": "array", "items": {"type": "string"},
                              "description": "Yazma izni verilen dosyalarin TAM listesi (calisma dizinine goreli). "
                                             "Verilirse baska dosyaya yazma REDDEDILIR. Olculdu: 'yalnizca X yaz' "
