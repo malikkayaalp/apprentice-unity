@@ -1,0 +1,42 @@
+{
+ "zaman": "2026-08-23 20:04:09",
+ "tur1": {
+  "sure_s": 30.7,
+  "kullanim": {
+   "wall_s": 30.0,
+   "load_s": 0.53,
+   "prompt_tokens": 4263,
+   "pp_tps": 485.5,
+   "gen_tokens": 599,
+   "tg_tps": 29.4,
+   "model_cagrisi": 3
+  },
+  "gizli": "7/8"
+ },
+ "A_oturumlu": {
+  "oturum_verildi": true,
+  "sure_s": 37.6,
+  "prompt_tok": 8119,
+  "uretim_tok": 745,
+  "arac": 2,
+  "araclar": [
+   "read_file stok.py",
+   "write_file stok.py"
+  ],
+  "gizli": "12/12",
+  "derleme_durumu": "derlendi"
+ },
+ "B_oturumsuz": {
+  "oturum_verildi": false,
+  "sure_s": 40.6,
+  "prompt_tok": 5100,
+  "uretim_tok": 800,
+  "arac": 2,
+  "araclar": [
+   "read_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\oturum\\B_oturumsuz\\stok.py",
+   "write_file C:\\Users\\malik.kayaalp\\Desktop\\Apprentice\\.apprentice_test_home\\oturum\\B_oturumsuz\\stok.py"
+  ],
+  "gizli": "12/12",
+  "derleme_durumu": "derlendi"
+ }
+}

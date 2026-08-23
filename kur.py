@@ -415,8 +415,13 @@ Dongu, olcumle secildi: cirak yazar -> usta CALISTIRARAK dogrular -> duzeltme bu
    Olculdu: '1.00 kalem' hatasi okumayla degil calistirmayla yakalandi.
 3) DUZELT - hata varsa:
    - kucukse (<~20 satir, tek dosya): KENDIN duzelt; cirak turu bekleme, yanlis anlama riski alma.
-   - buyukse/cok dosyaliysa: ayni 'oturum' ile ciraga don. Genel konusma ("testler tutmuyor" YASAK);
-     her hata icin: hangi dosya, hangi fonksiyon, hangi girdi, ne geldi, ne gelmeliydi.
+   - buyukse/cok dosyaliysa: ciraga don. Genel konusma ("testler tutmuyor" YASAK); her hata icin:
+     hangi dosya, hangi fonksiyon, hangi girdi, ne geldi, ne gelmeliydi.
+   - `oturum` VARSAYILAN OLARAK VERME. Olculdu: kisa bir devam isinde oturum tasimak prompt'u
+     %59 artirdi (8.1k vs 5.1k), kalite ve sure ayni - cunku isci oturumlu turda da dosyayi
+     yeniden read_file ile okuyor, yani hem gecmisi hem taze okumayi odiyorsun. Oturumu yalnizca
+     devam isi DOSYADA OLMAYAN bir baglama dayaniyorsa ver (onceki kararin gerekcesi, denenip
+     elenen yol gibi).
 4) HAFIZA - kalici bir ders cikarsa (proje kurali, tekrarlanan hata, sozlesme karari) workspace
    kokundeki HAFIZA.md dosyasina KISA bir madde ekle/guncelle; cirak her iste bunu sistem
    isteminde gorur (ilk 3000 karakter). Gecici seyleri yazma.
