@@ -80,6 +80,20 @@ def offline() -> bool:
     assert r["exit"] == 0, r
     print("%s dogrulayici: ok" % CR.TEST_ADI)
 
+    # bos yazma korumasi (olculdu: derleme kipinde model ayni icerigi 10 kez yazdi, 880 s yandi)
+    ayni = "def f():\n    return 1\n"
+    d("write_file", {"path": "ayni.py", "contents": ayni})
+    n_once = len([e for e in em.ev if e["type"] == "write"])
+    r = d("write_file", {"path": "ayni.py", "contents": ayni})
+    assert r.get("degisiklik") is False and "AYNI ICERIK" in r.get("uyari", ""), r
+    r = d("write_file", {"path": "ayni.py", "contents": ayni})
+    assert "SIMDI OZETLE" in r.get("uyari", ""), r
+    assert len([e for e in em.ev if e["type"] == "write"]) == n_once, "bos yazma 'write' olayi uretmemeli"
+    assert written.count("ayni.py") == 1, "bos yazma yazilan dosyalara eklenmemeli"
+    r = d("write_file", {"path": "ayni.py", "contents": ayni + "# degisti\n"})
+    assert r.get("ok") and r.get("degisiklik") is not False, r
+    print("bos yazma korumasi: ok")
+
     # shell
     r = d("run_shell", {"cmd": "git push origin main"})
     assert "reddedildi" in r.get("error", ""), r

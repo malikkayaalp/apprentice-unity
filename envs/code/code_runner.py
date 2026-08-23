@@ -148,6 +148,9 @@ def shell(cmd: list | str, cwd: str, timeout: int = SHELL_TIMEOUT) -> dict:
         return {"exit": -1, "out": "zaman asimi (%d s)" % timeout, "sure": timeout}
 
 
+NOOP = {"n": 0}      # ust uste kac kez ayni icerik yazilmaya calisildi
+
+
 def make_dispatch(jail: Jail, written: list, em):
     def d(name: str, args: dict):
         args = args if isinstance(args, dict) else {}
@@ -185,6 +188,19 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
         if os.path.isfile(p):
             with open(p, encoding="utf-8", errors="replace") as f:
                 before = f.read()
+        # BOS YAZMA KORUMASI (olculdu 2026-08-23): dogrulama="derleme" kipinde test/shell araci
+        # olmadigi icin model "kontrol etmek" ister gibi AYNI icerigi 10 kez yazdi; 880 s ve
+        # 150k token yandi, adim siniri doldu, ozet yazilamadi. Ayni icerik artik yazma sayilmaz
+        # ve modele acikca "degismedi, bittiyse ozetle" denir.
+        if before is not None and before == str(a.get("contents") or ""):
+            NOOP["n"] += 1
+            uyari = ("AYNI ICERIK: %s zaten birebir bu haldeydi, hicbir sey degismedi. "
+                     "Tekrar yazma. Yapacak baska bir sey kaldiysa onu yap; kalmadiysa ARAC CAGIRMA "
+                     "ve tek mesajla ozetle." % rel)
+            if NOOP["n"] >= 2:
+                uyari += (" [%d kez ust uste bos yazma yaptin - dosya hazir. SIMDI OZETLE.]" % NOOP["n"])
+            return {"ok": True, "path": rel, "degisiklik": False, "uyari": uyari}
+        NOOP["n"] = 0
         os.makedirs(os.path.dirname(p) or jail.root, exist_ok=True)
         contents = str(a.get("contents") or "")
         with open(p, "w", encoding="utf-8", newline="\n") as f:
