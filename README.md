@@ -1,5 +1,23 @@
 # Apprentice · Unity
 
+**A local model does the work, a frontier model supervises.**
+
+This repository is the **self-contained** Apprentice distribution for Unity users: the apprentice
+core, the Unity tool set (write/read script, add component, play-mode observation), compile and
+play-mode verification, and the Q3CNFU Editor panel — plus the optional MCP server for Cursor and
+Claude Code. Nothing else to clone.
+
+A local model (Ollama, Qwen3-Coder-Next) writes the C#; **Unity's own compiler** decides whether it
+worked, never the model's claim. Compiler errors go straight back to the model until they are gone,
+and `play_observe` measures the actual runtime behaviour in numbers. The tool block is kept small on
+purpose: 1.2k tokens instead of the full 20k MCP surface, re-sent every turn.
+
+Not using Unity? The Unity-free version is [apprentice](https://github.com/malikkayaalp/apprentice).
+
+---
+
+# Türkçe
+
 **A local model does the work, a frontier model supervises.** Bu depo, Unity kullanıcıları için
 **tek başına yeterli** Apprentice dağıtımıdır: çırak çekirdeği + Unity araç seti + Q3CNFU Editor paneli
 + (isteğe bağlı) Cursor/Claude Code için MCP sunucusu. Başka bir depo gerekmez.
