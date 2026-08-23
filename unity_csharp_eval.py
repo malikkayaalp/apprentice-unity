@@ -37,7 +37,11 @@ from core.guard import guarded_dispatch
 from mcpbridge.http_client import MCPHttpServer
 from mcpbridge.client import to_ollama_tools, content_to_text, MCPError
 
-URL = os.environ.get("UNITY_MCP_URL", "http://127.0.0.1:8080/mcp")
+try:
+    from core import config as _CFG
+    URL = _CFG.env_or("UNITY_MCP_URL", "unity.mcp_url", "http://127.0.0.1:8080/mcp")
+except Exception:  # cekirdek olmadan (tek basina calistirma) eski davranis
+    URL = os.environ.get("UNITY_MCP_URL", "http://127.0.0.1:8080/mcp")
 EVAL_TOOLS = ["execute_code", "create_script", "validate_script", "read_console",
               "manage_asset"]
 

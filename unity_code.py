@@ -50,7 +50,7 @@ import unity_sandbox as SB
 # Olculen: Cloner 7.00/8 (stock 5.00, p=0.016), MCP 10/11, 29.6 tok/s - test
 # edilen modeller icinde kod yazmada anlamli bicimde onde olan tek model.
 # Oncelik: ortam degiskeni > apprentice.config.json > sablon > burasi (core/config.py).
-DEFAULT_MODEL = CFG.env_or("UNITY_CODE_MODEL", "ollama.model",
+DEFAULT_MODEL = CFG.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model",
                            "hf.co/unsloth/Qwen3-Coder-Next-GGUF:UD-Q4_K_XL")
 SCRIPT_DIR = CFG.env_or("UNITY_CODE_DIR", "unity.script_dir", "Assets/Scripts")
 # Only what a pure write-code-and-fix-errors loop touches. manage_asset was dropped
@@ -69,11 +69,11 @@ SERVER_TOOLS = ["read_console", "validate_script"]
 # Bu is yukunde prefill baskin (arac blogu ~3800 token + dosya okumalari + cok tur),
 # bu yuzden takas acik ara karli. DIKKAT: kisa promptla olcum yaniltir - kisa prompt
 # tek batch'e sigar, sure olculemeyecek kadar kisa cikar ve oran sisirilir.
-NUM_BATCH = CFG.env_or("UNITY_CODE_BATCH", "makine.num_batch", 4096, int)
+NUM_BATCH = CFG.env_or(["APPRENTICE_BATCH", "UNITY_CODE_BATCH"], "makine.num_batch", 4096, int)
 # 32768 -> 65536: olcumde yavaslama YOK (28.0 -> 28.9 t/s, GPU payi %28 sabit).
 # Kazanci: cok dosyali islerde sinira yaklasmamak. Sinir asilirsa Ollama prompt'u
 # SESSIZCE yariya kesiyor ve model kesik parcadan emin sekilde uyduruyor.
-NUM_CTX = CFG.env_or("UNITY_CODE_CTX", "makine.num_ctx", 65536, int)
+NUM_CTX = CFG.env_or(["APPRENTICE_CTX", "UNITY_CODE_CTX"], "makine.num_ctx", 65536, int)
 # Kapali alan dosya araclari (sb_*) VARSAYILAN OLARAK KAPALI. Silme yetkisi iceriyorlar
 # ve bu projede silme bir kez gercek zarar verdi. UNITY_CODE_SANDBOX=1 ile acilir.
 SANDBOX_MODE = os.environ.get("UNITY_CODE_SANDBOX", "0") == "1"
