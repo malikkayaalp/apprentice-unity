@@ -108,7 +108,8 @@ SYSTEM = (
     "- Betikleri {dir} altina yaz. Dosya adi sinif adiyla AYNI olmali.\n"
     "- Var olan bir dosyayi degistirecegin zaman once read_script ile oku, sonra "
     "write_script ile TAM yeni icerigi yaz. Kismi yama yapma.\n"
-    "- Yalnizca gercekten var olan Unity API'lerini kullan. Unity 6 hedefle.\n"
+    "- Yalnizca gercekten var olan Unity API'lerini kullan. Unity 6 hedefle. EMIN DEGILSEN "
+    "api_ara ile Unity'nin kendi belgesinden dogrula (Ingilizce sorgu); API UYDURMA.\n"
     "- Derleme hatasi bildirilirse hatanin gectigi dosyayi oku, sebebi bul, duzeltilmis "
     "TAM dosyayi yaz.\n"
     "- SAHNEYI OKUMA: inspect_object (bir objenin scriptleri, alan degerleri, "
@@ -230,6 +231,16 @@ def _scene_tools():
                 "class_name": {"type": "string",
                                "description": "Sinif adi, orn: EnemyChase"}},
                 "required": ["class_name"]}}},
+        {"type": "function", "function": {
+            "name": "api_ara",
+            "description": "Unity API'sinde ara: ne yapmak istedigini INGILIZCE yaz (orn 'set "
+                           "animator bool parameter'), Unity'nin kendi belgesinden gercek uye "
+                           "adlarini + tek satir ozet doner. Emin olmadigin her API icin ONCE bunu "
+                           "cagir; listede olmayan API'yi UYDURMA.",
+            "parameters": {"type": "object", "properties": {
+                "sorgu": {"type": "string", "description": "Ingilizce, kisa: 'raycast from camera'"},
+                "tip": {"type": "string", "description": "istege bagli: metot|ozellik|tip|alan|olay"}},
+                "required": ["sorgu"]}}},
         {"type": "function", "function": {
             "name": "play_observe",
             "description": "Play moda girer, verdigin C# ifadesini her 0.5 saniyede bir "
@@ -574,6 +585,9 @@ return sb.ToString();
         # --- unity_assets araclari: varlik gorme, derin hiyerarsi, Inspector yazma ---
         if name.startswith("sb_"):
             return kapali_alan(name, args)
+        if name == "api_ara":
+            import api_rag
+            return api_rag.api_ara(str(args.get("sorgu") or ""), 8, str(args.get("tip") or ""))
         if name in ("list_assets", "inspect_asset", "hierarchy", "add_component",
                     "remove_missing_components", "set_field", "create_asset", "set_material",
                     "list_animator_states", "add_animator_state",
