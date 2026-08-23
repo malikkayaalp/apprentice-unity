@@ -1,0 +1,104 @@
+{
+  "yazilan_dosyalar": [
+    {
+      "yol": "Assets/Scripts/SuruDevreDisiYapici.cs",
+      "yeni": false,
+      "eklendi": 0,
+      "silindi": 0,
+      "satir": 0
+    }
+  ],
+  "derleme_durumu": "derleme_hatasi",
+  "hatalar": [
+    "The referenced script (SuruDevreDisiYapici) on this Behaviour is missing!\\n",
+    "The referenced script on this Behaviour (Game Object 'Suru') is missing!\\n",
+    "isci nihai ozet yazmadi (adim siniri ya da bos cevap); araclar listesine ve olcumlere bak"
+  ],
+  "tur_sayisi": 3,
+  "sure": 238.7,
+  "ozet": "",
+  "olcumler": [
+    {
+      "arac": "scene_objects",
+      "sonuc": "{\n \"scene\": \"scene=Test_Local_Model\\nMain Camera  [Camera, AudioListener, UniversalAdditionalCameraData]\\nDirectional Light  [Light, UniversalAdditionalLightData]\\nSuru  [SuruYoneticisi, SuruDevriye, <MISSING>]\\nSuru/Ajan_1  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_2  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_3  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_4  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_5  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_6  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_7  [MeshFilter, SphereCollider, MeshRenderer]\\nSuru/Ajan_8  [MeshFilter, SphereCollider, MeshRenderer]\\nLider  [MeshFilter, SphereCollider, MeshRenderer, LiderHareketi]\\n\"\n}",
+      "sure_s": 1.1
+    },
+    {
+      "arac": "inspect_object",
+      "sonuc": "{\n \"object\": \"Suru\",\n \"detail\": \"path=Suru\\nactive=True tag=Untagged\\nposition=0,00,0,00,0,00\\ncomponent: Transform\\ncomponent: SuruYoneticisi  script=Assets/Scripts/SuruYoneticisi.cs\\n    ref lider -> sahne:Lider (Transform)\\n    minAjanMesafe = 1,50\\n    sinirX = 7,00\\n    sinirZ = 7,00\\n    ayrismaMesafe = 2,20\\ncomponent: SuruDevriye  script=Assets/Scripts/SuruDevriye.cs\\n    yaricap = 4,00\\n    tamTurSuresi = 12,00\\n    yKonumu = 0,50\\ncomponent: <MISSING SCRIPT>\\nchildren: Ajan_1 Ajan_2 Ajan_3 Ajan_4 Ajan_5 Ajan_6 Ajan_7 Ajan_8\\n\"\n}",
+      "sure_s": 2.2
+    },
+    {
+      "arac": "read_console",
+      "sonuc": "{\"success\": true, \"message\": \"Retrieved 2 log entries.\", \"data\": [\"The referenced script (SuruDevreDisiYapici) on this Behaviour is missing!\\n\", \"The referenced script on this Behaviour (Game Object 'Suru') is missing!\\n\"]}",
+      "sure_s": 0.1
+    },
+    {
+      "arac": "inspect_object",
+      "sonuc": "{\n \"object\": \"Suru\",\n \"detail\": \"path=Suru\\nactive=True tag=Untagged\\nposition=0,00,0,00,0,00\\ncomponent: Transform\\ncomponent: SuruYoneticisi  script=Assets/Scripts/SuruYoneticisi.cs\\n    ref lider = <BOS>\\n    minAjanMesafe = 1,50\\n    sinirX = 7,00\\n    sinirZ = 7,00\\n    ayrismaMesafe = 2,20\\ncomponent: SuruDevriye  script=Assets/Scripts/SuruDevriye.cs\\n    yaricap = 4,00\\n    tamTurSuresi = 12,00\\n    yKonumu = 0,50\\ncomponent: <MISSING SCRIPT>\\nchildren: Ajan_1 Ajan_2 Ajan_3 Ajan_4 Ajan_5 Ajan_6 Ajan_7 Ajan_8\\n\"\n}",
+      "sure_s": 1.2
+    },
+    {
+      "arac": "read_console",
+      "sonuc": "{\"success\": true, \"message\": \"Retrieved 2 log entries.\", \"data\": [\"The referenced script (SuruDevreDisiYapici) on this Behaviour is missing!\\n\", \"The referenced script on this Behaviour (Game Object 'Suru') is missing!\\n\"]}",
+      "sure_s": 4.7
+    },
+    {
+      "arac": "inspect_object",
+      "sonuc": "{\n \"object\": \"Suru\",\n \"detail\": \"path=Suru\\nactive=True tag=Untagged\\nposition=0,00,0,00,0,00\\ncomponent: Transform\\ncomponent: SuruYoneticisi  script=Assets/Scripts/SuruYoneticisi.cs\\n    ref lider = <BOS>\\n    minAjanMesafe = 1,50\\n    sinirX = 7,00\\n    sinirZ = 7,00\\n    ayrismaMesafe = 2,20\\ncomponent: SuruDevriye  script=Assets/Scripts/SuruDevriye.cs\\n    yaricap = 4,00\\n    tamTurSuresi = 12,00\\n    yKonumu = 0,50\\ncomponent: <MISSING SCRIPT>\\nchildren: Ajan_1 Ajan_2 Ajan_3 Ajan_4 Ajan_5 Ajan_6 Ajan_7 Ajan_8\\n\"\n}",
+      "sure_s": 1.2
+    }
+  ],
+  "araclar": [
+    "scene_objects ",
+    "inspect_object Suru",
+    "inspect_asset ",
+    "inspect_asset ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "list_assets ",
+    "read_console ",
+    "inspect_object Suru",
+    "list_scripts Assets/Scripts",
+    "read_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "read_console ",
+    "inspect_object Suru",
+    "list_scripts Assets/Scripts",
+    "read_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs",
+    "write_script Assets/Scripts/SuruDevreDisiYapici.cs"
+  ],
+  "play": null,
+  "oturum": "20260823-030743-0e3850",
+  "is_id": "20260823-031857-bd3e5f",
+  "ortam": "unity",
+  "kabul_kriterleri": [
+    "SuruYoneticisi editorde disabled",
+    "SuruDevriye aktif tamTurSuresi=12",
+    "SuruDevreDisiYapici yok",
+    "derlendi",
+    "sahne kaydedildi"
+  ],
+  "is_klasoru": "C:\\Users\\malik.kayaalp\\.apprentice\\jobs\\20260823-031857-bd3e5f",
+  "durum": "bitti"
+}

@@ -1,0 +1,14 @@
+{
+    "name": "Q3CNFU.Editor",
+    "rootNamespace": "Q3CNFU.EditorTools",
+    "references": [],
+    "includePlatforms": [ "Editor" ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

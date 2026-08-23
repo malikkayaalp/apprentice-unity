@@ -1,0 +1,87 @@
+{
+ "baslangic": "2026-08-22 23:20:01",
+ "gorev": "Suru altındaki 8 küre XZ düzleminde rastgele hareket etsin.",
+ "kriterler": [
+  "Hiçbir anda hiçbir küre çifti birbirine 2 birimden yakın olmasın (merkezler arası mesafe ≥ 2).",
+  "Her kürenin |x| ve |z| değeri 5'i aşmasın.",
+  "Bunu play_observe ile 15 saniye boyunca doğrula; ölçümü ham raporla.",
+  "Script Assets/Scripts/SuruYoneticisi.cs olsun, Suru objesine add_component ile ekle (küreleri silme, yeniden yaratma)."
+ ],
+ "turlar": [
+  {
+   "tur": 1,
+   "isci": {
+    "derleme_durumu": "derlendi",
+    "hatalar": [],
+    "tur_sayisi": 1,
+    "sure": 286.2,
+    "yazilan_dosyalar": [
+     {
+      "yol": "Assets/Scripts/SuruYoneticisi.cs",
+      "yeni": true,
+      "eklendi": 156,
+      "silindi": 10,
+      "satir": 146
+     }
+    ],
+    "araclar": [
+     "scene_objects ",
+     "inspect_object Suru",
+     "inspect_object Suru/Ajan_1",
+     "hierarchy ",
+     "list_scripts ",
+     "write_script Assets/Scripts/SuruYoneticisi.cs",
+     "add_component ",
+     "play_observe ",
+     "read_script Assets/Scripts/SuruYoneticisi.cs",
+     "write_script Assets/Scripts/SuruYoneticisi.cs",
+     "play_observe "
+    ],
+    "is_id": "20260822-232021-85fdd6",
+    "oturum": "20260822-232021-85fdd6"
+   },
+   "isci_ozet": "15 saniye boyunca tüm ölçümlerde \"TUM KRITERLER SAGLANDI\" döndü. \n\n**Özet:**\n- `Assets/Scripts/SuruYoneticisi.cs` scripti yazıldı.\n- Script, Suru objesine `add_component` ile eklendi.\n- Script, kürelerin XZ düzleminde (Y=0.5 sabit) rastgele hareket etmesini sağlıyor.\n- Başlangıçta çakışma varsa agresif bir düzeltme algoritması çalışıyor.\n- Her küre çifti arasındaki mesafe ≥ 2 birim ve her kürenin |x| ≤ 5, |z| ≤ 5 sınırları korunuyor.\n- 15 saniyelik play_observe testinde tüm kriterler sürekli sağlanıyor.",
+   "isci_olcum_sayisi": 5,
+   "denetci": {
+    "ornek_sayisi": 10,
+    "hata": [],
+    "en_kucuk_mesafe": 2.003,
+    "max_abs_x": 4.986,
+    "max_abs_z": 4.709,
+    "K1_ihlal_ornek": 0,
+    "K2_ihlal_ornek": 0,
+    "hareket_var": true,
+    "K1": true,
+    "K2": true,
+    "K3": true
+   },
+   "denetci_ornekler": [
+    "n=8;min=2.050;maxx=4.859;maxz=4.166",
+    "n=8;min=2.064;maxx=4.965;maxz=3.701",
+    "n=8;min=2.244;maxx=4.938;maxz=3.660",
+    "n=8;min=2.379;maxx=4.965;maxz=3.655",
+    "n=8;min=2.125;maxx=4.924;maxz=3.603",
+    "n=8;min=2.005;maxx=4.914;maxz=3.588",
+    "n=8;min=2.003;maxx=4.964;maxz=4.323",
+    "n=8;min=2.344;maxx=4.954;maxz=3.680",
+    "n=8;min=2.052;maxx=4.986;maxz=4.168",
+    "n=8;min=2.180;maxx=4.958;maxz=4.709"
+   ]
+  }
+ ],
+ "baslangic_olcumu": {
+  "ornek_sayisi": 4,
+  "hata": [],
+  "en_kucuk_mesafe": 2.0,
+  "max_abs_x": 7.0,
+  "max_abs_z": 0.0,
+  "K1_ihlal_ornek": 0,
+  "K2_ihlal_ornek": 4,
+  "hareket_var": false,
+  "K1": true,
+  "K2": false,
+  "K3": false
+ },
+ "gecti": true,
+ "bitis": "2026-08-22 23:25:37"
+}
