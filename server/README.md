@@ -145,9 +145,14 @@ olay şemasını (system/tool/tool_result/write/assistant/result/exit) uygular.
 
 ## İzleme
 
-`python clients/web/monitor.py [--port 8765] [--home ~/.apprentice]` — sunucuya bağlanmaz, iş
-klasörünü okur; hangi istemci başlatmış olursa olsun her iş listede: durum, doğrulama, dosyalar, araç akışı
-(argüman + sonuç), ölçümler, işçinin özeti. `/api/jobs` aynı veriyi JSON verir.
+**Masaüstü (önerilen):** `python izle.py [--home ~/.apprentice]` — koyu temalı canlı izleyici
+(tkinter, bağımlılıksız): iş listesi, renk kodlu canlı olay akışı (araç/yazım/hata/sonuç), iş özeti
+(durum, tur, token, DURAĞANLIK/ruff/bütçe/hafıza uyarıları), son yazılan dosyanın önizlemesi,
+üstte model + VRAM/GPU satırı. Sunucuya bağlanmaz, iş klasörünü okur — hangi istemci başlatmış
+olursa olsun her iş görünür.
+
+**Web:** `python clients/web/monitor.py [--port 8765] [--home ~/.apprentice]` — aynı veriyi
+tarayıcıda listeler; `/api/jobs` JSON verir.
 
 ## Ölçüm kampanyası
 
