@@ -91,6 +91,30 @@ def offline() -> bool:
     assert r["exit"] == 0, r
     print("%s dogrulayici: ok" % CR.TEST_ADI)
 
+    # test cikti sikistiricisi: 800 satirlik dokum yerine sayim + hata basina tek satir + imza
+    HAM_PYTEST = ("....F..F\n" + "uzun traceback satiri\n" * 200 +
+                  "FAILED test_oyun.py::test_zipla - AssertionError: 4.2 != 0\n"
+                  "FAILED test_oyun.py::test_dogus - NameError: name 'yz' is not defined\n"
+                  "= 2 failed, 6 passed in 0.31s =\n")
+    rap = CR.test_ozetle(HAM_PYTEST, 1)
+    assert rap["sayim"] == "2 failed, 6 passed in 0.31s", rap["sayim"]
+    assert len(rap["hatalar"]) == 2 and rap["hatalar"][0][0] == "test_oyun.py::test_zipla"
+    assert len(rap["imzalar"]) == 2
+    m0 = CR.test_metni(dict(rap, ok=False), None)
+    assert "DUSTU test_oyun.py::test_zipla - AssertionError" in m0 and len(m0) < 400, m0
+    # ikinci turda ayni + yeni etiketleri
+    rap2 = CR.test_ozetle("FAILED test_oyun.py::test_zipla - AssertionError: 4.2 != 0\n"
+                          "FAILED test_oyun.py::test_puan - ValueError: kotu\n"
+                          "= 2 failed, 6 passed in 0.30s =\n", 1)
+    m1 = CR.test_metni(dict(rap2, ok=False), rap["imzalar"])
+    assert "[AYNI - onceki duzeltme bunu COZMEDI]" in m1 and "[YENI]" in m1, m1
+    # unittest bicimi + cozulmeyen bicim cokmez
+    ru = CR.test_ozetle("FAIL: test_a (mod.T)\n----\nRan 3 tests in 0.1s\nFAILED (failures=1)\n", 1)
+    assert ru["hatalar"][0][0].startswith("test_a") and "Ran 3 tests" in ru["sayim"] or ru["sayim"], ru
+    rb = CR.test_ozetle("anlasilmaz cikti\n", 7)
+    assert rb["hatalar"][0][0] == "cikti_cozulemedi", rb
+    print("test cikti sikistiricisi: ok")
+
     # bos yazma korumasi (olculdu: derleme kipinde model ayni icerigi 10 kez yazdi, 880 s yandi)
     ayni = "def f():\n    return 1\n"
     d("write_file", {"path": "ayni.py", "contents": ayni})

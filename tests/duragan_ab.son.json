@@ -1,0 +1,27 @@
+{
+ "zaman": "2026-08-24 01:58:04",
+ "A_dedektorsuz": {
+  "dedektor": false,
+  "sure_s": 854.3,
+  "tur_sayisi": 4,
+  "prompt_tok": 66359,
+  "uretim_tok": 19605,
+  "model_cagrisi": 10,
+  "duragan": false,
+  "hatalar": [
+   "unittest testleri: FAILED (errors=1)\nDUSTU test_sabit (unittest.loader._FailedTest.test_sabit) [AYNI - onceki duzeltme bunu COZMEDI]"
+  ]
+ },
+ "B_dedektorlu": {
+  "dedektor": true,
+  "sure_s": 600.3,
+  "tur_sayisi": 2,
+  "prompt_tok": 45684,
+  "uretim_tok": 13904,
+  "model_cagrisi": 9,
+  "duragan": true,
+  "hatalar": [
+   "DURAGANLIK: ayni test hatalari 2 tur ust uste degismedi - isci ilerleyemiyor, usta mudahalesi gerekli.\nunittest testleri: FAILED (errors=1)\nDUSTU test_sabit (unittest.loader._FailedTest.test_sabit) [AYNI - onceki duzeltme bunu COZMEDI]"
+  ]
+ }
+}

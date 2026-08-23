@@ -236,6 +236,10 @@ class Job:
                 if e.get("ruff"):
                     # uyaridir, hata degil: derleme_durumu'na dokunmaz; karari denetci verir
                     rep["ruff_uyarilari"] = e["ruff"]
+                if e.get("duragan"):
+                    rep["duragan"] = True       # isci ayni hatada kilitlendi; somut teshis SENDEN
+                if e.get("butce_uyarisi"):
+                    rep["butce_uyarisi"] = e["butce_uyarisi"]
                 if e.get("play") and e["play"].get("hatalar"):
                     rep["hatalar"].extend("calisma zamani: " + h for h in e["play"]["hatalar"])
             elif t == "error":

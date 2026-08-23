@@ -338,13 +338,68 @@ def has_tests(root: str) -> bool:
                 glob.glob(os.path.join(root, "**", "*_test.py"), recursive=True))
 
 
-def test_errors(jail: Jail) -> list:
+def test_ozetle(ham: str, cikis) -> dict:
+    """Ham test dokumunu hata-izi kivamina sikistirir (2026-08-24, olculen ilke: isciye
+    giden sinyal 'satiri ve nedeni yazili' olmali; 800 satirlik dokum baglam katilidir).
+
+    Doner: {"sayim": "2 failed, 5 passed", "hatalar": [(test_id, sebep)], "imzalar": frozenset}
+    Imza = test_id + hata tipi; onarim turlari arasinda ayni-hata takibi bununla yapilir.
+    """
+    hatalar = []
+    for s in ham.splitlines():
+        s = s.strip()
+        if s.startswith(("FAILED ", "ERROR ")) and ("::" in s or ".py" in s):
+            parca = s.split(" ", 1)[1]                     # pytest -q: id - sebep
+            tid, _, sebep = parca.partition(" - ")
+            hatalar.append((tid.strip(), sebep.strip()[:160]))
+        elif s.startswith(("FAIL: ", "ERROR: ")):          # unittest basligi
+            hatalar.append((s.split(": ", 1)[1].strip()[:120], ""))
+    sayim = ""
+    for s in reversed(ham.splitlines()):
+        t = s.strip().strip("= ")
+        if t and ("passed" in t or "failed" in t or "error" in t.lower()
+                  or t.startswith("Ran ") or t.startswith("FAILED (")):
+            sayim = t[:120]
+            break
+    if not hatalar:                                        # cozulmeyen bicim: son anlamli satir
+        son = [x for x in ham.strip().splitlines() if x.strip()]
+        hatalar = [("cikti_cozulemedi", (son[-1].strip()[:160] if son else "cikis %s" % cikis))]
+    imzalar = frozenset("%s|%s" % (t, (s.split(":")[0] if s else "")) for t, s in hatalar)
+    return {"sayim": sayim or ("cikis %s" % cikis), "hatalar": hatalar, "imzalar": imzalar}
+
+
+SON_TEST_HAM = {"out": ""}      # sikistirici ham dokumu YUTMASIN: usta eskalasyonda isteyebilir
+
+
+def test_raporu(jail: Jail) -> dict:
+    """Testleri kosar; basarisizsa sikistirilmis rapor doner. Ham dokum SON_TEST_HAM'da
+    kalir ve is bitiminde events.jsonl'a yazilir - isci ozeti gorur, usta gerekirse hami."""
     if not has_tests(jail.root):
-        return []
+        return {"ok": True}
     r = shell(TEST_CMD, jail.root)
+    SON_TEST_HAM["out"] = r["out"] or ""
     if r["exit"] == 0:
-        return []
-    return ["%s cikis %s:\n%s" % (TEST_ADI, r["exit"], r["out"][-2500:])]
+        return {"ok": True}
+    return dict(test_ozetle(r["out"], r["exit"]), ok=False)
+
+
+def test_metni(rap: dict, onceki: frozenset | None) -> str:
+    """Isciye giden ozet; onceki tur imzalari verilirse her hata YENI/AYNI diye etiketlenir."""
+    satirlar = ["%s testleri: %s" % (TEST_ADI, rap["sayim"])]
+    for tid, sebep in rap["hatalar"][:8]:
+        imza = "%s|%s" % (tid, (sebep.split(":")[0] if sebep else ""))
+        etiket = ""
+        if onceki is not None:
+            etiket = " [AYNI - onceki duzeltme bunu COZMEDI]" if imza in onceki else " [YENI]"
+        satirlar.append("DUSTU %s%s%s" % (tid, (" - " + sebep) if sebep else "", etiket))
+    if len(rap["hatalar"]) > 8:
+        satirlar.append("... ve %d hata daha" % (len(rap["hatalar"]) - 8))
+    return "\n".join(satirlar)
+
+
+def test_errors(jail: Jail) -> list:
+    rap = test_raporu(jail)
+    return [] if rap["ok"] else [test_metni(rap, None)]
 
 
 def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
@@ -357,6 +412,8 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
     from core.client import Metrics
     kullanim = Metrics()            # olcum: toplam prompt/uretim tokeni ve sureleri (Ollama sayar)
     adim_sayisi = 0
+    onceki_imzalar: frozenset | None = None
+    duragan = False
     while True:
         res = run_agent(msgs, tools, dispatch, max_steps=12, model=model, think=False,
                         num_ctx=NUM_CTX, temperature=0.0, num_predict=6000, retries=2,
@@ -364,19 +421,39 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
         kullanim.merge(res.metrics); adim_sayisi += len(res.turns)
         msgs[:] = res.messages
         errs = compile_errors(jail, written)
+        imzalar: frozenset | None = None
         if not errs and DOGRULAMA == "tam":
-            errs = test_errors(jail)
+            rap = test_raporu(jail)
+            if not rap["ok"]:
+                errs = [test_metni(rap, onceki_imzalar)]
+                imzalar = rap["imzalar"]
         if not errs or rounds >= max_repairs:
             break
+        # DURAGANLIK DEDEKTORU (2026-08-24): ayni hata imzalari iki degerlendirmede ust uste
+        # degismediyse isci ilerleyemiyor demektir - kalan onarim turlarini yakmak yerine
+        # ustaya birak (olculdu: dongudeki model dongude oldugunu degerlendiremiyor;
+        # bos-yazma korumasinin test kipindeki karsiligi). APPRENTICE_DURAGANLIK=0 kapatir.
+        if (imzalar is not None and imzalar == onceki_imzalar
+                and os.environ.get("APPRENTICE_DURAGANLIK", "1") != "0"):
+            duragan = True
+            errs = ["DURAGANLIK: ayni test hatalari 2 tur ust uste degismedi - isci "
+                    "ilerleyemiyor, usta mudahalesi gerekli.\n" + errs[0]]
+            break
+        onceki_imzalar = imzalar if imzalar is not None else onceki_imzalar
         rounds += 1
         msgs.append({"role": "user", "content":
                      "DOGRULAMA HATASI:\n" + "\n".join(errs[:6]) +
                      "\nIlgili dosyayi read_file ile oku, sebebi bul ve write_file ile "
                      "duzeltilmis TAM dosyayi yaz."})
     k = kullanim.as_dict(); k["model_cagrisi"] = adim_sayisi
+    # Butce bekcisi: cagri basina ortalama prompt 17k'yi asiyorsa filtreleme birakilmis demektir
+    # (rapor uyarisi; sert sinir degil - karari usta verir).
+    ort = (k.get("prompt_tokens") or 0) / max(1, adim_sayisi)
+    butce = ("cagri basina ortalama prompt %d token (>17k) - baglam filtrelemesi zayifladi; "
+             "yazilabilir/ara/harita ayarlarini gozden gecir" % ort) if ort > 17000 else ""
     return {"errors": errs, "rounds": rounds, "wall": time.time() - t0,
             "text": res.final_text or "", "stopped": res.stopped, "error": res.error,
-            "kullanim": k}
+            "kullanim": k, "duragan": duragan, "butce_uyarisi": butce}
 
 
 # ---------------------------------------------------------------------- CLI
@@ -488,9 +565,13 @@ def main() -> int:
         for rel in dict.fromkeys(written):
             if rel.endswith(".py"):
                 ruff_rapor += ruff_uyarilari(jail, rel)
+        if SON_TEST_HAM["out"] and (errs or r.get("duragan")):
+            # ham dokum is klasorunde (events.jsonl) dursun; rapora GIRMEZ (baglami sisirmesin)
+            em.emit("test_ham", boyut=len(SON_TEST_HAM["out"]), out=SON_TEST_HAM["out"][-20000:])
         em.emit("result", ok=not errs, errors=[e[:600] for e in errs[:5]], rounds=r["rounds"],
                 wall=round(r["wall"], 1), written=list(dict.fromkeys(written)), play=None,
-                kullanim=r.get("kullanim"), ruff=ruff_rapor[:12] or None)
+                kullanim=r.get("kullanim"), ruff=ruff_rapor[:12] or None,
+                duragan=r.get("duragan", False), butce_uyarisi=r.get("butce_uyarisi") or None)
         code = 0 if not errs else 2
     except Exception as e:  # noqa: BLE001
         em.emit("error", message=("%s: %s" % (type(e).__name__, e))[:300])
