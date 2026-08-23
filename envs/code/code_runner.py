@@ -521,11 +521,32 @@ def main() -> int:
         # Proje hafizasi: calisma dizinindeki HAFIZA.md (usta yazar: proje kurallari, gecmis
         # dersler). Varsa sistem istemine eklenir, 3000 karakterle kirpilir.
         hafiza = ""
+        hafiza_uyarisi = ""
         hp = os.path.join(jail.root, "HAFIZA.md")
         if os.path.isfile(hp):
             try:
                 with open(hp, encoding="utf-8", errors="replace") as f:
-                    hafiza = f.read().strip()[:3000]
+                    tam_hafiza = f.read().strip()
+                hafiza = tam_hafiza[:3000]
+                if len(tam_hafiza) > 3000:
+                    # SISME KUSURU (2026-08-24): usta dersleri SONA ekler, kirpma BASTAN alir
+                    # -> dosya tasinca en yeni dersler isciye sessizce gitmiyordu. Sessiz kalmasin:
+                    hafiza_uyarisi = ("HAFIZA.md %d karakter (sinir 3000) - SON %d karakter isciye "
+                                      "GITMIYOR; dosyayi ozetleyip kisalt (eski dersleri birlestir/sil)"
+                                      % (len(tam_hafiza), len(tam_hafiza) - 3000))
+            except OSError:
+                pass
+        durum = ""
+        durum_uyarisi = ""
+        dp = os.path.join(jail.root, "STATE.md")
+        if os.path.isfile(dp):
+            try:
+                with open(dp, encoding="utf-8", errors="replace") as f:
+                    tam_durum = f.read().strip()
+                durum = tam_durum[:2000]
+                if tam_durum.count("\n") > 200:
+                    durum_uyarisi = ("STATE.md %d satir (sinir 200) - eski devirleri "
+                                     "STATE_ARSIV.md'ye tasi" % (tam_durum.count("\n") + 1))
             except OSError:
                 pass
         written: list = []
@@ -540,6 +561,13 @@ def main() -> int:
                 test_satiri=(TEST_SATIRI_TAM.format(test=TEST_ADI) if DOGRULAMA == "tam" else TEST_SATIRI_DERLEME))
             if hafiza:
                 sistem += "\n\nPROJE HAFIZASI (bu projenin kurallari ve gecmis dersleri; UY):\n" + hafiza
+            # GUNCEL DURUM (2026-08-24, OpenMemory STATE fikri): onceki islerden damitilmis devir.
+            # Olculdu: ham oturum tasimak +%59 pahali; devir dosyasi "dosyada olmayan baglami"
+            # (elenen yollar, koddan gorunmeyen kararlar) ucuza tasir. Teamul: EN YENI USTTE -
+            # bastan kirpma bu sayede en yeniyi korur (HAFIZA'daki sessiz-kayip kusuru burada yok).
+            if durum:
+                sistem += ("\n\nGUNCEL DURUM (STATE.md - onceki islerin devri, en yeni ustte; "
+                           "koddan gorunmeyen kararlara UY):\n" + durum)
             # PROJE HARITASI (2026-08-24, OpenMemory'nin MAP fikri): hedefin YERI bilinmeyen
             # iste isci adressiz kaliyordu (olculdu: 120 dosyayi sirayla okuyup coktu).
             # Harita "dosya -> semboller" adresini sifir sorguyla verir; denetci acar (harita=true).
@@ -571,7 +599,8 @@ def main() -> int:
         em.emit("result", ok=not errs, errors=[e[:600] for e in errs[:5]], rounds=r["rounds"],
                 wall=round(r["wall"], 1), written=list(dict.fromkeys(written)), play=None,
                 kullanim=r.get("kullanim"), ruff=ruff_rapor[:12] or None,
-                duragan=r.get("duragan", False), butce_uyarisi=r.get("butce_uyarisi") or None)
+                duragan=r.get("duragan", False), butce_uyarisi=r.get("butce_uyarisi") or None,
+                hafiza_uyarisi=hafiza_uyarisi or None, durum_uyarisi=durum_uyarisi or None)
         code = 0 if not errs else 2
     except Exception as e:  # noqa: BLE001
         em.emit("error", message=("%s: %s" % (type(e).__name__, e))[:300])

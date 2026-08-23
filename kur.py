@@ -4,7 +4,7 @@
     python kur.py --kontrol       # yalnizca durumu goster, hicbir sey degistirme
     python kur.py --ide cursor,vscode   # yalnizca bu IDE'leri ayarla (cursor, vscode, windsurf, claude-desktop)
     python kur.py --olc           # + ilk calistirma num_batch olcumu (2-3 dk, GPU'ya ozel)
-    python kur.py --kural <proje_klasoru>   # denetci kural dosyasini o projeye yaz (Cursor .mdc + genel .md)
+    python kur.py --kural <proje_klasoru>   # denetci kuralini yaz: AGENTS.md (ortak) + Cursor .mdc + Copilot yonlendirme
 
 Windows'ta ayni betik Apprentice-Setup.exe olarak paketlenir (PyInstaller); Python yoksa resmi
 gomulu Python'u (embeddable, ~11 MB) depoya indirir ve sunucu onunla calisir.
@@ -425,8 +425,14 @@ Dongu, olcumle secildi: cirak yazar -> usta CALISTIRARAK dogrular -> duzeltme bu
      elenen yol gibi).
 4) HAFIZA - kalici bir ders cikarsa (proje kurali, tekrarlanan hata, sozlesme karari) workspace
    kokundeki HAFIZA.md dosyasina KISA bir madde ekle/guncelle; cirak her iste bunu sistem
-   isteminde gorur (ilk 3000 karakter). Gecici seyleri yazma.
-5) BUYUK PROJE - cok dosyali depoda gorevde ciraga soyle: "once ara('...') ile ilgili yeri bul,
+   isteminde gorur (ilk 3000 karakter). Gecici seyleri yazma. Rapor `hafiza_uyarisi` verirse
+   dosya tasmis demektir: ozetleyip kisalt, yoksa en yeni dersler ciraga gitmez.
+5) DURUM (STATE.md) - onemli bir isin sonunda workspace kokundeki STATE.md'ye devir notu yaz,
+   EN YENI USTTE: ne yapildi, nerede kalindi, hangi yollar denenip ELENDI, koddan gorunmeyen
+   kararlar (adlandirma/bicim teamulleri gibi). Cirak her iste ilk 2000 karakteri gorur.
+   200 satiri asinca eskileri STATE_ARSIV.md'ye tasi (rapor `durum_uyarisi` hatirlatir).
+   Olculdu: ham `oturum` tasimak +%59 pahali - damitilmis devir onun yerine gecer.
+6) BUYUK PROJE - cok dosyali depoda gorevde ciraga soyle: "once ara('...') ile ilgili yeri bul,
    sonra yalnizca o dosyalari oku". ara araci anlamsal arama yapar (bge-m3; yoksa BM25 sozcuksel yedek).
    Olculdu: dosya adini GOREVDE verebiliyorsan ara gereksiz (list_files+read_file daha ucuz);
    veremiyorsan (hedefin yerini sen de bilmiyorsan) ara SART - arasiz isci 120 dosyayi sirayla
@@ -434,29 +440,37 @@ Dongu, olcumle secildi: cirak yazar -> usta CALISTIRARAK dogrular -> duzeltme bu
    Alternatif: worker_run(harita=true) sembol haritasini sistem istemine koyar - olculdu (120
    dosya): ara 11.2k tok/83s, harita 19.4k tok/51s, ikisi 30.9k (asla birlikte acma). Harita
    her model cagrisinda yeniden odenir ve depoyla buyur: varsayilan ara, bge-m3 yoksa harita.
-6) RUFF - donen raporda `ruff_uyarilari` varsa (tanimsiz isim vb: derlenir ama calisirken
+7) RUFF - donen raporda `ruff_uyarilari` varsa (tanimsiz isim vb: derlenir ama calisirken
    patlar) degerlendir; gercekse somut teshisle duzelttir. Olculdu: isci uyariyla YENI kodu
    temiz yaziyor (bulasma 1/5 -> 4/5 onlendi) ama MEVCUT hatayi "davranisi koru" diye
    birakiyor - o karar senin.
-7) En fazla 4 tur. Bitince raporla: tur sayisi, sure, her kriter NASIL dogrulandi (hangi komut/cikti).
+8) En fazla 4 tur. Bitince raporla: tur sayisi, sure, her kriter NASIL dogrulandi (hangi komut/cikti).
 """
 
 
 def kural_yaz(proje: str) -> bool:
-    """Cursor: .cursor/rules/apprentice.mdc (otomatik uygulanir). Diger IDE'ler icin ayni metin
-    APPRENTICE.md olarak proje kokune; kullanici sohbete '@APPRENTICE.md' der ya da
-    Copilot icin .github/copilot-instructions.md'ye ekler."""
+    """Tek kaynak AGENTS.md (OpenMemory standardi - Codex/Copilot/Gemini dogrudan okur);
+    Cursor icin .cursor/rules/apprentice.mdc ayni govdeyle (otomatik uygulanir), Copilot icin
+    .github/ zaten varsa ona isaret eden kucuk bir yonlendirme yazilir."""
+    govde = KURAL.split("---")[-1].strip() + "\n"
+    p_agents = os.path.join(proje, "AGENTS.md")
+    with open(p_agents, "w", encoding="utf-8", newline="\n") as f:
+        f.write("# Apprentice denetci kurali\n\n" + govde)
+    log(OK + "AGENTS.md yazildi: %s  (tum ajanlarin ortak kural kaynagi)" % p_agents)
     d = os.path.join(proje, ".cursor", "rules")
     os.makedirs(d, exist_ok=True)
     p = os.path.join(d, "apprentice.mdc")
     with open(p, "w", encoding="utf-8", newline="\n") as f:
         f.write(KURAL)
     log(OK + "Cursor kurali yazildi: %s" % p)
-    govde = KURAL.split("---")[-1].strip() + "\n"
-    p2 = os.path.join(proje, "APPRENTICE.md")
-    with open(p2, "w", encoding="utf-8", newline="\n") as f:
-        f.write("# Apprentice denetci kurali\n\n" + govde)
-    log(OK + "Genel kural yazildi: %s  (VS Code/Copilot: .github/copilot-instructions.md'ye ekle)" % p2)
+    gh = os.path.join(proje, ".github")
+    if os.path.isdir(gh):
+        yol = os.path.join(gh, "copilot-instructions.md")
+        if not os.path.isfile(yol):
+            with open(yol, "w", encoding="utf-8", newline="\n") as f:
+                f.write("Bu projede AGENTS.md'deki Apprentice denetci kuralini uygula.\n")
+            log(OK + "Copilot yonlendirmesi yazildi: %s" % yol)
+    # eski ad birakildiysa temizlik kullaniciya birakilir; yeni yazim APPRENTICE.md uretmez
     return True
 
 

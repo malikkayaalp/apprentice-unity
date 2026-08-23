@@ -123,7 +123,12 @@ dosya > şablon > kod).
 | `code` | read_file, write_file, list_files, run_shell, run_tests, **ara** (anlamsal kod araması, bge-m3) | `compile()` + pytest (yoksa stdlib unittest) | `envs/code/code_runner.py` |
 
 `code` ortamı ayrıca: **proje hafızası** — workspace kökünde `HAFIZA.md` varsa içeriği (3000 karaktere kadar)
-işçinin sistem istemine eklenir; ustanın kalıcı dersleri yazdığı yerdir. **`ara` araci** — çalışma dizinini
+işçinin sistem istemine eklenir; ustanın kalıcı dersleri yazdığı yerdir (taşarsa rapor `hafiza_uyarisi` verir).
+**İş devri** — `STATE.md` varsa ilk 2000 karakteri de eklenir: ustanın iş sonunda yazdığı devir notu
+(en yeni üstte; ne yapıldı, elenen yollar, koddan görünmeyen kararlar). Ölçüldü: ham `oturum` taşımak
++%59 pahalı; damıtılmış devir onun yerine geçer. 200 satırı aşınca `STATE_ARSIV.md`'ye taşınır
+(rapor `durum_uyarisi` hatırlatır). `kur.py --kural` artık ortak kuralı **AGENTS.md** olarak yazar
+(Cursor `.mdc` + Copilot yönlendirmesi aynı gövdeye işaret eder). **`ara` araci** — çalışma dizinini
 parçalayıp bge-m3 ile gömer (`ollama pull bge-m3`), indeks `~/.apprentice/rag/` altında, dosya değişince
 yalnızca değişen yeniden gömülür; işçi "neyi okuyacağını" körlemesine okumadan bulur. bge-m3 yoksa
 `ara` sözcüksel yedeğe (BM25) düşer — sonuç yine döner, cevaptaki `kip` alanı hangi yolun kullanıldığını

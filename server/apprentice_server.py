@@ -240,6 +240,10 @@ class Job:
                     rep["duragan"] = True       # isci ayni hatada kilitlendi; somut teshis SENDEN
                 if e.get("butce_uyarisi"):
                     rep["butce_uyarisi"] = e["butce_uyarisi"]
+                if e.get("hafiza_uyarisi"):
+                    rep["hafiza_uyarisi"] = e["hafiza_uyarisi"]
+                if e.get("durum_uyarisi"):
+                    rep["durum_uyarisi"] = e["durum_uyarisi"]
                 if e.get("play") and e["play"].get("hatalar"):
                     rep["hatalar"].extend("calisma zamani: " + h for h in e["play"]["hatalar"])
             elif t == "error":

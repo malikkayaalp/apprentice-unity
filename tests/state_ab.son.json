@@ -1,0 +1,21 @@
+{
+ "zaman": "2026-08-24 02:35:42",
+ "A_statesiz": {
+  "state": false,
+  "sure_s": 39.2,
+  "prompt_tok": 4604,
+  "uretim_tok": 622,
+  "gizli": "5/6",
+  "cikti": "OK   tasi temel\nOK   kaynak biter\nOK   girdi degismez\nOK   mevcut ekle korunur\nOK   yetersizde ValueError  yetersiz\nHATA KARAR: mesaj bicimi 'stok yetersiz: <urun>'  yetersiz\nPUAN 5/6\n",
+  "derleme_durumu": "derlendi"
+ },
+ "B_stateli": {
+  "state": true,
+  "sure_s": 37.6,
+  "prompt_tok": 5178,
+  "uretim_tok": 612,
+  "gizli": "6/6",
+  "cikti": "OK   tasi temel\nOK   kaynak biter\nOK   girdi degismez\nOK   mevcut ekle korunur\nOK   yetersizde ValueError  stok yetersiz: a\nOK   KARAR: mesaj bicimi 'stok yetersiz: <urun>'  stok yetersiz: a\nPUAN 6/6\n",
+  "derleme_durumu": "derlendi"
+ }
+}

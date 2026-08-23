@@ -143,7 +143,10 @@ def offline() -> bool:
     assert "kurus" in icerik
     src = open(os.path.join(ROOT, "envs", "code", "code_runner.py"), encoding="utf-8").read()
     assert 'HAFIZA.md' in src and "PROJE HAFIZASI" in src and '"ara"' in src
-    print("hafiza + ara araci kancalari: ok")
+    assert 'STATE.md' in src and "GUNCEL DURUM" in src and "STATE_ARSIV" in src   # devir kancasi
+    kural = open(os.path.join(ROOT, "kur.py"), encoding="utf-8").read()
+    assert "AGENTS.md" in kural and "STATE.md" in kural                           # kural standardi
+    print("hafiza + durum (STATE) + ara kancalari: ok")
     return True
 
 
