@@ -9,6 +9,16 @@ from core import tokens as _tok
 OLLAMA = "http://localhost:11434"
 DEFAULT_MODEL = "gpt-oss:120b"
 
+# Model is bitince RAM'de ne kadar kalsin. OLCULDU: 80B/Q4_K_XL modelin ~39 GB'i RAM'de durur
+# (14.6 GB VRAM'e sigar), yani bu deger dogrudan bosta tutulan RAM demektir. Yeniden yukleme
+# bedeli ~30-60 sn. Ayar dosyasindan okunur (eskiden burada 60m sabitti ve config yok sayiliyordu).
+try:
+    from core import config as _cfg
+    KEEP_ALIVE = _cfg.env_or("APPRENTICE_KEEP_ALIVE", "ollama.keep_alive", "30m")
+except Exception:  # cekirdek disinda tek basina kullanim
+    import os as _os
+    KEEP_ALIVE = _os.environ.get("APPRENTICE_KEEP_ALIVE", "30m")
+
 
 @dataclass
 class Metrics:
@@ -133,7 +143,7 @@ def normalize_think(model: str, think: str | bool | None) -> str | bool | None:
 
 def chat(messages: list[dict], tools: list[dict] | None = None, *,
          model: str = DEFAULT_MODEL, think: str | bool = "low", num_ctx: int = 16384,
-         temperature: float = 0.0, num_predict: int = 2048, keep_alive: str = "60m",
+         temperature: float = 0.0, num_predict: int = 2048, keep_alive: str = KEEP_ALIVE,
          timeout: int = 3600, extra_options: dict | None = None,
          retries: int = 0) -> Turn:
     """One chat turn. With retries > 0, malformed-tool-call 500s are retried with

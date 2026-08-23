@@ -8,3 +8,7 @@ apprentice.config.json
 mcpbridge/servers.json
 .apprentice_test_home/
 deneme/
+runtime/
+build/
+dist/
+*.spec

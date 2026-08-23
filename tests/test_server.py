@@ -94,8 +94,13 @@ def main() -> int:
         assert r["isError"] and "bos" in r["structuredContent"]["hata"], r
         r = c.tool("worker_run", {"gorev": "x", "kabul_kriterleri": [], "ortam": "yok"})
         assert r["isError"] and "bilinmeyen ortam" in r["structuredContent"]["hata"]
+        # Kok bilinmiyorken GORELI yol reddedilmeli. Olculdu: eskiden cwd'ye dusuluyordu
+        # ve hapishane kokunu tum ev dizini yapiyordu (Cursor sunucuyu ev dizininden baslatir).
         r = c.tool("worker_run", {"gorev": "x", "kabul_kriterleri": [], "ortam": "code"})
-        assert r["isError"] and "calisma koku bilinmiyor" in r["structuredContent"]["hata"], r
+        assert r["isError"] and "koku belirlenemedi" in r["structuredContent"]["hata"], r
+        r = c.tool("worker_run", {"gorev": "x", "kabul_kriterleri": [], "ortam": "code",
+                                  "calisma_dizini": "alt/klasor"})
+        assert r["isError"] and "koku belirlenemedi" in r["structuredContent"]["hata"], r
         try:
             c.tool("yok", {})
             raise AssertionError("bilinmeyen arac hata vermedi")

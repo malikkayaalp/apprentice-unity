@@ -9,7 +9,7 @@
   "ollama": {
     "url": "http://localhost:11434",
     "model": "hf.co/unsloth/Qwen3-Coder-Next-GGUF:UD-Q4_K_XL",
-    "keep_alive": "60m",
+    "keep_alive": "30m",
     "timeout_s": 3600,
     "_olcum_model": "6 model icinde kod yazmada anlamli bicimde one cikan tek model. Cloner 7.00/8 (stock 5.00, p=0.016), MCP 10/11, 29.6 tok/s. Q6 denendi: -%22 hiz, tek gorevde kazanc, degmez."
   },

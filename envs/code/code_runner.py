@@ -58,13 +58,24 @@ TEST_CMD = ([sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider
             else [sys.executable, "-B", "-m", "unittest", "discover", "-v"])
 TEST_ADI = "pytest" if HAS_PYTEST else "unittest"
 
+# "tam": derleme + test kosulur (varsayilan). "derleme": yalnizca derlenir; isci test kosmaz,
+# olcum uretilmez - dogrulamayi denetci yapar (kucuk donus, kucuk baglam).
+DOGRULAMA = os.environ.get("APPRENTICE_DOGRULAMA", "tam")
+
+TEST_SATIRI_TAM = ("- Testleri run_tests ile kosarsin ({test}; test dosyalari test_*.py, "
+                   "unittest.TestCase siniflari her iki kosucuda da calisir). Komutlari "
+                   "run_shell ile calistirirsin (120 sn sinir).\n")
+TEST_SATIRI_DERLEME = ("- BU TURDA TEST KOSUCUSU YOK. Kodu yaz; dogru ve derlenir olmasi yeterli. "
+                       "Test dosyasi istenmediyse yazma, komut calistirma. Dogrulamayi DENETCI "
+                       "yapacak: yazdigin kodu okuyacak. Bu yuzden okunur yaz ve nihai mesajinda "
+                       "ne yaptigini kisa ve somut anlat.\n")
+
 SYSTEM = (
     "Sen bir yazilim gelistiricisisin. Calisma dizini: {dir}\n"
     "- Dosya yollari calisma dizinine gorelidir; disina cikamazsin, silemezsin.\n"
     "- Var olan dosyayi degistirecegin zaman once read_file ile oku, sonra write_file ile "
     "TAM yeni icerigi yaz. Kismi yama yapma.\n"
-    "- Testleri run_tests ile kosarsin ({test}; test dosyalari test_*.py, unittest.TestCase "
-    "siniflari her iki kosucuda da calisir). Komutlari run_shell ile calistirirsin (120 sn sinir).\n"
+    "{test_satiri}"
     "- Derleme ya da test hatasi bildirilirse ilgili dosyayi oku, sebebi bul, duzeltilmis "
     "TAM dosyayi yaz.\n"
     "- Tur basina tek arac cagir. Bittiginde kisaca Turkce ozetle: ne yazdin, testler "
@@ -94,10 +105,21 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {
             "cmd": {"type": "string"}}, "required": ["cmd"]}}},
     {"type": "function", "function": {
+        "name": "ara",
+        "description": "Kod tabaninda anlamsal arama: ne aradigini duz dille yaz (orn 'kupon "
+                       "indirimi nerede uygulaniyor'), en yakin kod parcalarini dosya+satir "
+                       "araligiyla doner. Buyuk projede dosyalari korlemesine OKUMADAN once bunu "
+                       "kullan; sonra yalnizca ilgili dosyayi read_file ile oku.",
+        "parameters": {"type": "object", "properties": {
+            "sorgu": {"type": "string", "description": "aranan davranis/kavram, duz dille"}},
+            "required": ["sorgu"]}}},
+    {"type": "function", "function": {
         "name": "run_tests",
         "description": "Testleri calistir (%s); sonucu ve cikis kodunu doner." % TEST_ADI,
         "parameters": {"type": "object", "properties": {
-            "args": {"type": "string", "description": "ek pytest argumanlari (istege bagli)"}},
+            "args": {"type": "string", "description": "istege bagli: test dosyasi/modulu "
+                     "(orn 'test_x.py' ya da 'tests/test_x.py') veya ek %s argumani. "
+                     "Bos birakirsan tum testler kosar - kabul olcumu budur." % TEST_ADI}},
             "required": []}}},
 ]
 
@@ -177,6 +199,12 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
             if os.path.isfile(p) and not any(x in p for x in ("__pycache__", os.sep + ".git" + os.sep, ".pytest_cache")):
                 out.append(os.path.relpath(p, jail.root).replace("\\", "/"))
         return {"files": sorted(out)[:500], "sayi": len(out)}
+    if name == "ara":
+        from core import rag
+        try:
+            return rag.ara(jail.root, str(a.get("sorgu") or ""))
+        except RuntimeError as e:
+            return {"error": str(e)}
     if name == "run_shell":
         cmd = str(a.get("cmd") or "")
         # Silme yasagi shell uzerinden delinmesin; push disariya cikistir.
@@ -187,9 +215,38 @@ def _run(jail: Jail, written: list, em, name: str, a: dict):
             return {"error": "komut reddedildi (%s): silme ve push bu ortamda yok" % ", ".join(vur)}
         return shell(cmd, jail.root)
     if name == "run_tests":
-        cmd = TEST_CMD + [x for x in str(a.get("args") or "").split() if x]
-        return shell(cmd, jail.root)
+        return shell(_test_cmd(str(a.get("args") or "")), jail.root)
     return {"error": "bilinmeyen arac %r" % name}
+
+
+def _test_cmd(args: str) -> list:
+    """run_tests komutunu kur.
+
+    OLCULDU (2026-08-23, Cursor turu): isci makul bicimde run_tests(args="test_x.py")
+    cagirdi; TEST_CMD pytest yoksa "unittest discover" oldugu icin ilk konumsal arguman
+    BASLANGIC DIZINI sayildi -> "Start directory is not importable: 'test_x.py'". Isci
+    ayni testi run_shell ile kosup gecti gordu ve "testler gecti" dedi; resmi olcum
+    kirmizi kaldi. Yani sahte bir beyan-olcum celiskisi URETTIK - mimarinin dayandigi
+    sinyali kirletir. unittest'te dosya/yol argumani modul adina cevrilir.
+    """
+    ek = [x for x in args.split() if x]
+    if not ek or HAS_PYTEST:
+        return TEST_CMD + ek                      # pytest dosya yolunu zaten anlar
+
+    moduller, bayraklar = [], []
+    for x in ek:
+        if x.startswith("-"):
+            bayraklar.append(x)
+            continue
+        y = x.replace("\\", "/").strip("/")
+        if y.endswith(".py"):
+            y = y[:-3]
+        moduller.append(y.replace("/", "."))
+
+    if not moduller:
+        return TEST_CMD + bayraklar
+    # discover DEGIL: modul adiyla dogrudan kosulur.
+    return [x for x in TEST_CMD if x != "discover"] + bayraklar + moduller
 
 
 # ----------------------------------------------------------------- dogrulayici
@@ -229,12 +286,18 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
     t0 = time.time()
     rounds = 0
     errs: list = []
+    from core.client import Metrics
+    kullanim = Metrics()            # olcum: toplam prompt/uretim tokeni ve sureleri (Ollama sayar)
+    adim_sayisi = 0
     while True:
         res = run_agent(msgs, tools, dispatch, max_steps=12, model=model, think=False,
                         num_ctx=NUM_CTX, temperature=0.0, num_predict=6000, retries=2,
                         extra_options={"num_batch": NUM_BATCH})
+        kullanim.merge(res.metrics); adim_sayisi += len(res.turns)
         msgs[:] = res.messages
-        errs = compile_errors(jail, written) or test_errors(jail)
+        errs = compile_errors(jail, written)
+        if not errs and DOGRULAMA == "tam":
+            errs = test_errors(jail)
         if not errs or rounds >= max_repairs:
             break
         rounds += 1
@@ -242,8 +305,10 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
                      "DOGRULAMA HATASI:\n" + "\n".join(errs[:6]) +
                      "\nIlgili dosyayi read_file ile oku, sebebi bul ve write_file ile "
                      "duzeltilmis TAM dosyayi yaz."})
+    k = kullanim.as_dict(); k["model_cagrisi"] = adim_sayisi
     return {"errors": errs, "rounds": rounds, "wall": time.time() - t0,
-            "text": res.final_text or "", "stopped": res.stopped, "error": res.error}
+            "text": res.final_text or "", "stopped": res.stopped, "error": res.error,
+            "kullanim": k}
 
 
 # ---------------------------------------------------------------------- CLI
@@ -308,6 +373,16 @@ def main() -> int:
         jail = Jail(a.workdir)
         em.emit("system", subtype="init", model=a.model, session_id=a.session, workdir=jail.root)
 
+        # Proje hafizasi: calisma dizinindeki HAFIZA.md (usta yazar: proje kurallari, gecmis
+        # dersler). Varsa sistem istemine eklenir, 3000 karakterle kirpilir.
+        hafiza = ""
+        hp = os.path.join(jail.root, "HAFIZA.md")
+        if os.path.isfile(hp):
+            try:
+                with open(hp, encoding="utf-8", errors="replace") as f:
+                    hafiza = f.read().strip()[:3000]
+            except OSError:
+                pass
         written: list = []
         kapali = [k.strip() for k in os.environ.get("APPRENTICE_TOOLS_OFF", "").split(",") if k.strip()]
         tools = [t for t in TOOLS if t["function"]["name"] not in kapali]
@@ -316,7 +391,11 @@ def main() -> int:
         dispatch = guarded_dispatch(tools, make_dispatch(jail, written, em))
         msgs = load_session(a.session_dir, a.session)
         if not msgs:
-            msgs = [{"role": "system", "content": SYSTEM.format(dir=jail.root, test=TEST_ADI)}]
+            sistem = SYSTEM.format(dir=jail.root, test=TEST_ADI,
+                test_satiri=(TEST_SATIRI_TAM.format(test=TEST_ADI) if DOGRULAMA == "tam" else TEST_SATIRI_DERLEME))
+            if hafiza:
+                sistem += "\n\nPROJE HAFIZASI (bu projenin kurallari ve gecmis dersleri; UY):\n" + hafiza
+            msgs = [{"role": "system", "content": sistem}]
         r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools)
         save_session(a.session_dir, a.session, msgs, a.model)
         if r["text"]:
@@ -325,7 +404,8 @@ def main() -> int:
         if r.get("error"):
             errs.append("model dongusu: %s" % r["error"])
         em.emit("result", ok=not errs, errors=[e[:600] for e in errs[:5]], rounds=r["rounds"],
-                wall=round(r["wall"], 1), written=list(dict.fromkeys(written)), play=None)
+                wall=round(r["wall"], 1), written=list(dict.fromkeys(written)), play=None,
+                kullanim=r.get("kullanim"))
         code = 0 if not errs else 2
     except Exception as e:  # noqa: BLE001
         em.emit("error", message=("%s: %s" % (type(e).__name__, e))[:300])

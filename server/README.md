@@ -22,6 +22,7 @@ worker_run(gorev, kabul_kriterleri, ortam="code", calisma_dizini?, oturum?, play
 | `oturum` | string | önceki çağrının `oturum`u verilirse işçi aynı bağlamla devam eder |
 | `play` | bool | ortama özgü ek çalışma-zamanı doğrulaması (eklenti destekliyorsa; vars. false) |
 | `onarim` | int | azami derleme onarım turu (vars. 3) |
+| `dogrulama` | `tam` \| `derleme` | `tam` (vars.): işçi testleri de koşar, ham test çıktısı döner. `derleme`: işçi **yalnızca yazar** — test/shell araçları kapalı, harness test koşmaz, ölçüm dönmez; kodu denetçi okur ve onaylar. Ölçüldü: dönüş ~3000 → **~480 token**, süre 139 → 36 s |
 | `araclar_kapali` | string[] | bu turda işçiden saklanacak araçlar (ör. bir ölçüm aracı) — ölçümü denetçi yapar, işçi ölçüm-düzeltme döngüsüne giremez (ölçüldü: talimatla söylenince işçi iki turda yine ölçtü, ~400 s/tur) |
 | `zaman_asimi_s` | number | üst sınır (vars. 1800); aşılırsa işçi durdurulur |
 | `bekle` | bool | `false`: hemen `is_id` ile dön, `worker_status(is_id)` ile yokla. **Cursor için gerekli** (ölçüldü: Cursor'ın araç zaman aşımı ~2.5 dk, bir motor-eklentisi turu 2–8 dk) |
@@ -110,7 +111,7 @@ Roots desteklemeyen istemci için `APPRENTICE_WORKDIR_ROOT`; o da yoksa sunucunu
 Ölçüldü: IDE'nin açık klasörü sunucuyu kendiliğinden sınırlamaz — sınır bu mekanizmadır.
 
 Ortam değişkenleri: `APPRENTICE_WORKDIR_ROOT`, `APPRENTICE_HOME`, `APPRENTICE_TIMEOUT_S`, `APPRENTICE_PYTHON`
-(işçi için ayrı yorumlayıcı), `UNITY_CODE_MODEL`, `UNITY_MCP_URL`. Diğer ayarlar
+(işçi için ayrı yorumlayıcı), `APPRENTICE_MODEL`, `APPRENTICE_CTX`, `APPRENTICE_BATCH`. Diğer ayarlar
 `apprentice.config.json` (şablon: `apprentice.config.template.json`; öncelik env >
 dosya > şablon > kod).
 
@@ -118,7 +119,12 @@ dosya > şablon > kod).
 
 | ortam | araçlar | doğrulayıcı | koşucu |
 |---|---|---|---|
-| `code` | read_file, write_file, list_files, run_shell, run_tests | `compile()` + pytest (yoksa stdlib unittest) | `envs/code/code_runner.py` |
+| `code` | read_file, write_file, list_files, run_shell, run_tests, **ara** (anlamsal kod araması, bge-m3) | `compile()` + pytest (yoksa stdlib unittest) | `envs/code/code_runner.py` |
+
+`code` ortamı ayrıca: **proje hafızası** — workspace kökünde `HAFIZA.md` varsa içeriği (3000 karaktere kadar)
+işçinin sistem istemine eklenir; ustanın kalıcı dersleri yazdığı yerdir. **`ara` araci** — çalışma dizinini
+parçalayıp bge-m3 ile gömer (`ollama pull bge-m3`), indeks `~/.apprentice/rag/` altında, dosya değişince
+yalnızca değişen yeniden gömülür; işçi "neyi okuyacağını" körlemesine okumadan bulur.
 | `fake` | — | — | `envs/fake/fake_runner.py` (olay şemasını taklit eder, model gerektirmez) |
 | eklentiler | ortamın kendi seti | ortamın kendi doğrulayıcısı (ör. derleyici + play) | `envs/<ad>/` — `env.json` ile tanımlanır, klonlanınca belirir |
 

@@ -1,0 +1,145 @@
+{
+ "baslangic": "2026-08-23 15:33:55",
+ "taban_w": 40.3,
+ "kwh_tl": 2.5,
+ "A": {
+  "parantez": {
+   "sure_s": 43.7,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 42.66,
+    "load_s": 0.87,
+    "prompt_tokens": 7474,
+    "pp_tps": 490.0,
+    "gen_tokens": 725,
+    "tg_tps": 27.9,
+    "model_cagrisi": 5
+   },
+   "enerji": {
+    "wh": 0.3004,
+    "ort_w": 64.8,
+    "tepe_w": 71.0,
+    "taban_w": 40.3,
+    "ornek": 79
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0008
+  },
+  "lru": {
+   "sure_s": 54.7,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 53.99,
+    "load_s": 0.89,
+    "prompt_tokens": 8544,
+    "pp_tps": 614.3,
+    "gen_tokens": 1083,
+    "tg_tps": 27.9,
+    "model_cagrisi": 5
+   },
+   "enerji": {
+    "wh": 0.4208,
+    "ort_w": 68.0,
+    "tepe_w": 72.8,
+    "taban_w": 40.3,
+    "ornek": 98
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0011
+  },
+  "roma": {
+   "sure_s": 322.7,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 321.69,
+    "load_s": 0.9,
+    "prompt_tokens": 11898,
+    "pp_tps": 749.0,
+    "gen_tokens": 7935,
+    "tg_tps": 26.1,
+    "model_cagrisi": 5
+   },
+   "enerji": {
+    "wh": 2.5646,
+    "ort_w": 68.9,
+    "tepe_w": 77.5,
+    "taban_w": 40.3,
+    "ornek": 574
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0064
+  },
+  "satis": {
+   "sure_s": 66.2,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 65.3,
+    "load_s": 0.9,
+    "prompt_tokens": 9025,
+    "pp_tps": 619.0,
+    "gen_tokens": 1404,
+    "tg_tps": 28.4,
+    "model_cagrisi": 5
+   },
+   "enerji": {
+    "wh": 0.4568,
+    "ort_w": 65.1,
+    "tepe_w": 70.0,
+    "taban_w": 40.3,
+    "ornek": 118
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0011
+  },
+  "fib_onar": {
+   "sure_s": 41.1,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 40.4,
+    "load_s": 0.87,
+    "prompt_tokens": 8076,
+    "pp_tps": 551.0,
+    "gen_tokens": 713,
+    "tg_tps": 29.0,
+    "model_cagrisi": 5
+   },
+   "enerji": {
+    "wh": 0.2604,
+    "ort_w": 63.1,
+    "tepe_w": 69.2,
+    "taban_w": 40.3,
+    "ornek": 74
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0007
+  },
+  "kelime": {
+   "sure_s": 94.8,
+   "derleme_durumu": "derlendi",
+   "onarim": 1,
+   "kullanim": {
+    "wall_s": 94.12,
+    "load_s": 1.43,
+    "prompt_tokens": 21269,
+    "pp_tps": 816.7,
+    "gen_tokens": 1785,
+    "tg_tps": 27.0,
+    "model_cagrisi": 8
+   },
+   "enerji": {
+    "wh": 0.6405,
+    "ort_w": 64.6,
+    "tepe_w": 69.6,
+    "taban_w": 40.3,
+    "ornek": 169
+   },
+   "gizli": "6/6",
+   "maliyet_tl": 0.0016
+  }
+ }
+}
