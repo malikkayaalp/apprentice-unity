@@ -54,8 +54,11 @@ def _kok_sec() -> dict:
            "r = tkinter.Tk(); r.withdraw(); r.attributes('-topmost', 1)\n"
            "print(f.askdirectory(title='Apprentice calisma alani sec'))")
     try:
-        r = subprocess.run([sys.executable, "-c", kod], capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=300)
+        pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+        r = subprocess.run([pyw if os.path.isfile(pyw) else sys.executable, "-c", kod],
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=300,
+                           creationflags=0x08000000 if os.name == "nt" else 0)
         yol = (r.stdout or "").strip()
         if yol and os.path.isdir(yol):
             AYAR["kok"] = os.path.abspath(yol)
@@ -427,8 +430,23 @@ def _usta_istek(veri: dict) -> dict:
     prompt = str(veri.get("prompt") or "").strip()
     if not prompt:
         return {"hata": "prompt bos"}
-    if not _sh.which("claude"):
-        return {"hata": "claude CLI bulunamadi (npm i -g @anthropic-ai/claude-code)"}
+    if str(veri.get("cli") or "claude") == "claude":
+        if not _sh.which("claude"):
+            return {"hata": "claude CLI bulunamadi. Kur: npm i -g @anthropic-ai/claude-code "
+                            "(ya da CLI seceneginden 'ozel CLI' ile baska ajan kullan)"}
+        # GIRIS KONTROLU: kurulu olmak yetmez, oturum acik olmali (yoksa istek sessizce
+        # anlamsiz hata dondururdu - kullanici sebebini goremezdi)
+        try:
+            r = _sp.run([_sh.which("claude"), "auth", "status"], capture_output=True, text=True,
+                        encoding="utf-8", errors="replace", timeout=45,
+                        creationflags=0x08000000 if os.name == "nt" else 0)
+            d = json.loads((r.stdout or "{}").strip() or "{}")
+            if not d.get("loggedIn"):
+                return {"hata": "Claude oturumu YOK. Bir terminal acip 'claude auth login' "
+                                "calistir (tarayicida Anthropic hesabinla giris), sonra tekrar "
+                                "gonder. Cirak (yerel model) girissiz calismaya devam eder."}
+        except Exception:
+            pass                       # durum okunamazsa istegi engelleme, denesin
     uid = time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(3).hex()
     kdir = os.path.join(HOME, "usta_istekler")
     os.makedirs(kdir, exist_ok=True)
@@ -489,7 +507,8 @@ def _usta_istek(veri: dict) -> dict:
                    PYTHONIOENCODING="utf-8")
         try:
             r = _sp.run(cmd, input=girdi, capture_output=True, text=True, encoding="utf-8",
-                        errors="replace", timeout=600, cwd=ROOT, env=env, shell=True)
+                        errors="replace", timeout=600, cwd=ROOT, env=env, shell=True,
+                        creationflags=0x08000000 if os.name == "nt" else 0)
             kayit["cevap"] = (r.stdout or "").strip() or ("HATA: " + (r.stderr or "")[-500:])
             kayit["durum"] = "bitti" if r.returncode == 0 else "hata"
         except Exception as e:  # noqa: BLE001
@@ -655,6 +674,23 @@ class Istek(BaseHTTPRequestHandler):
                 self._gonder(_usta_istek(veri))
             elif yolu == "/api/cirak_sohbet":
                 self._gonder(_cirak_sohbet(veri))
+            elif yolu == "/api/claude_login":
+                # 'claude auth login' GORUNUR konsolda: kullanici tarayicida giris yapar.
+                # Panel kimlik bilgisi ISTEMEZ/SAKLAMAZ - yalnizca resmi akisi baslatir.
+                import shutil as _sh2, subprocess as _sp2
+                exe = _sh2.which("claude")
+                if not exe:
+                    self._gonder({"hata": "claude CLI yok: npm i -g @anthropic-ai/claude-code"})
+                else:
+                    try:
+                        if os.name == "nt":
+                            _sp2.Popen(["cmd", "/c", "start", "Claude girisi", "cmd", "/k",
+                                        '"%s" auth login' % exe])
+                        else:
+                            _sp2.Popen([exe, "auth", "login"])
+                        self._gonder({"durum": "giris penceresi acildi"})
+                    except Exception as e:  # noqa: BLE001
+                        self._gonder({"hata": str(e)[:200]})
             elif yolu == "/api/eject":
                 self._gonder(_model_bosalt())
             elif yolu == "/api/yukle":

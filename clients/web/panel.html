@@ -792,8 +792,31 @@ async function ustaGonder(){
       body:JSON.stringify({prompt:p,araclar:$("#uAraclar").checked,cli:$("#uCli").value,
         sablon:$("#uSablon").value,model:$("#uModel").value,effort:$("#uEffort").value,
         ekler:uEkler})})).json();
-    if(r.hata){tost("HATA: "+r.hata);}
-    else{$("#uPrompt").value="";ustaSonH="";uEkler=[];eklerCiz(uEkler,"#uEkler");}
+    if(r.hata){
+      tost("HATA: "+r.hata);
+      // giris/kurulum eksigi kalici gorunsun (tost kaybolur): sohbete uyari balonu
+      if(/oturum|login|bulunamad/i.test(r.hata)){
+        const kap=$("#ustaChat");
+        kap.insertAdjacentHTML("beforeend",
+          '<div class="balon karsi" style="border-color:rgba(224,108,95,.55);color:var(--kirmizi)">'+
+          kacir(r.hata)+
+          (/oturum|login/i.test(r.hata)?'<br><button id="girisBtn" style="margin-top:8px;padding:6px 14px;'+
+           'border:none;border-radius:9px;cursor:pointer;font-weight:700;color:#fff;'+
+           'background:linear-gradient(135deg,var(--vurgu),#c96a48)">Claude'a giriş yap</button>'+
+           '<div style="margin-top:6px;color:var(--soluk);font-size:.85em">Claude Desktop girişi '+
+           'CLI'ya geçmez — ayrı oturumdur.</div>':"")+'</div>');
+        const gb=$("#girisBtn");
+        if(gb)gb.onclick=async()=>{
+          const j=await(await fetch("/api/claude_login",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:"{}"})).json();
+          tost(j.hata?("HATA: "+j.hata):"giriş penceresi açıldı — tarayıcıda hesabınla giriş yap");
+        };
+        kap.scrollTop=kap.scrollHeight; ustaSonH="";
+        $("#ustaDurum").textContent="giriş gerekli";
+      }
+    }
+    else{$("#uPrompt").value="";ustaSonH="";uEkler=[];eklerCiz(uEkler,"#uEkler");
+         $("#ustaDurum").textContent="";}
   }catch(e){tost("HATA: "+e);}
   b.disabled=false;
 }

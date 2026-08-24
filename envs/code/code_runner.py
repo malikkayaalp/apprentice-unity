@@ -145,7 +145,10 @@ def shell(cmd: list | str, cwd: str, timeout: int = SHELL_TIMEOUT) -> dict:
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONIOENCODING="utf-8")
         r = subprocess.run(cmd, cwd=cwd, shell=isinstance(cmd, str), capture_output=True,
                            timeout=timeout, text=True, encoding="utf-8", errors="replace",
-                           stdin=subprocess.DEVNULL, env=env)
+                           stdin=subprocess.DEVNULL, env=env,
+                           # penceresiz: sunucu pencereli bir istemciden baslatilinca isci her
+                           # run_shell/run_tests cagrisinda MS-DOS penceresi actiriyordu (yasandi)
+                           creationflags=0x08000000 if os.name == "nt" else 0)
         out = (r.stdout or "") + (("\n" + r.stderr) if r.stderr else "")
         return {"exit": r.returncode, "out": out[-MAX_OUT:], "sure": round(time.time() - t0, 1)}
     except subprocess.TimeoutExpired:
@@ -306,7 +309,8 @@ def ruff_uyarilari(jail: Jail, rel: str, sinir: int = 8) -> list:
         r = subprocess.run([sys.executable, "-m", "ruff", "check", "--select", "F,E9",
                             "--output-format", "concise", "--no-cache", rel],
                            cwd=jail.root, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=20)
+                           encoding="utf-8", errors="replace", timeout=20,
+                           creationflags=0x08000000 if os.name == "nt" else 0)
     except Exception:                                            # noqa: BLE001 - ruff yok/patladi
         return []
     if r.returncode not in (0, 1):                               # 2 = kullanim hatasi

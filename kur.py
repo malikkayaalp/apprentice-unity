@@ -198,7 +198,7 @@ def kontrol_ollama() -> bool:
         kw = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL,
               "env": dict(os.environ, OLLAMA_MAX_LOADED_MODELS=os.environ.get("OLLAMA_MAX_LOADED_MODELS", "1"))}
         if os.name == "nt":
-            kw["creationflags"] = 0x00000008 | 0x00000200   # DETACHED_PROCESS | NEW_PROCESS_GROUP
+            kw["creationflags"] = 0x00000008 | 0x00000200 | PENCERESIZ   # DETACHED | NEW_GROUP | NO_WINDOW
         subprocess.Popen([exe, "serve"], **kw)
     except Exception as e:
         log(HATA + "baslatilamadi: %s" % e)
@@ -521,6 +521,20 @@ def kontrol_cli() -> bool:
             pass
         bulunan.append(ad)
         log(OK + "%-13s %s %s" % (ad, surum or "(surum okunamadi)", "- " + aciklama))
+    if "claude" in bulunan:
+        # Kurulu olmak yetmez: giris yapilmamissa panelin USTA sohbeti calismaz.
+        try:
+            d = claude_giris_durumu()
+            if d.get("loggedIn"):
+                log(OK + "claude oturumu acik (%s / %s)"
+                    % (d.get("email", "?"), d.get("authMethod", "?")))
+            else:
+                log(UYARI + "claude KURULU ama GIRIS YAPILMAMIS - panelin USTA sohbeti "
+                            "calismaz. Kurulum penceresindeki 'Claude'a giris yap' dugmesini "
+                            "kullan ya da terminalde: claude auth login")
+                log(BILGI + "NOT: Claude Desktop girisi CLI'ya gecmez - ikisi ayri oturum tutar.")
+        except Exception:
+            log(BILGI + "claude oturum durumu okunamadi - gerekirse: claude auth login")
     yok = [a for a, _, _ in CLI_ADAYLARI if a not in bulunan]
     if yok:
         log(BILGI + "bulunamadi: %s  (istege bagli; panelde 'ozel CLI' alanindan da kullanilabilir)"
@@ -529,6 +543,40 @@ def kontrol_cli() -> bool:
         log(UYARI + "claude CLI yok - panelin USTA sohbeti calismaz. Kurmak icin: "
                     "npm i -g @anthropic-ai/claude-code")
     return True
+
+
+def claude_giris_durumu() -> dict:
+    """claude auth status -> {"loggedIn":bool, "email":...}. CLI yoksa/okunmazsa {}."""
+    exe = shutil.which("claude")
+    if not exe:
+        return {}
+    try:
+        r = kos([exe, "auth", "status"], timeout=45)
+        return json.loads((r.stdout or "{}").strip() or "{}")
+    except Exception:
+        return {}
+
+
+def claude_giris_baslat() -> bool:
+    """'claude auth login' akisini GORUNUR bir konsolda baslatir: kullanici tarayicida
+    Anthropic hesabiyla giris yapar. NOT: Claude Desktop girisi CLI'ya GECMEZ - ikisi
+    ayri oturum saklar (Desktop kendi kasasinda, CLI ~/.claude/.credentials.json).
+    Bu, kurulumun konsol acmasi gereken TEK yerdir (etkilesim gerekiyor)."""
+    exe = shutil.which("claude")
+    if not exe:
+        log(HATA + "claude CLI yok. Once kur: npm i -g @anthropic-ai/claude-code")
+        return False
+    try:
+        if os.name == "nt":
+            subprocess.Popen(["cmd", "/c", "start", "Claude girisi", "cmd", "/k",
+                              '"%s" auth login' % exe], shell=False)
+        else:
+            subprocess.Popen([exe, "auth", "login"])
+        log(BILGI + "Giris penceresi acildi: tarayicida hesabinla giris yap, sonra pencereyi kapat.")
+        return True
+    except Exception as e:  # noqa: BLE001
+        log(HATA + "giris baslatilamadi: %s  (elle: claude auth login)" % str(e)[:120])
+        return False
 
 
 def kisayol_yaz() -> bool:
