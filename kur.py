@@ -667,13 +667,19 @@ def kisayol_yaz() -> bool:
     adim '[ok]' gorunuyor, ozet penceresi olmayan bir kisayolu tarif ediyordu)."""
     if os.name != "nt":
         return True
-    py = sistem_python() or sys.executable
-    pyw = os.path.join(os.path.dirname(py), "pythonw.exe")
-    hedef = pyw if os.path.isfile(pyw) else py
-    betik = os.path.join(ROOT, "panel_ac.py")
-    if not os.path.isfile(betik):
-        log(UYARI + "panel_ac.py bulunamadi (%s) - panel kisayolu yazilmadi" % ROOT)
-        return False
+    # Native kabuk varsa kisayol DOGRUDAN onu gosterir: cift tikta gercek uygulama penceresi
+    # (Python arasi yok, ikon ve gorev cubugu kimligi kendisinin).
+    kabuk = os.path.join(ROOT, "Apprentice-Panel.exe")
+    if os.path.isfile(kabuk):
+        hedef, betik = kabuk, ""
+    else:
+        py = sistem_python() or sys.executable
+        pyw = os.path.join(os.path.dirname(py), "pythonw.exe")
+        hedef = pyw if os.path.isfile(pyw) else py
+        betik = os.path.join(ROOT, "panel_ac.py")
+        if not os.path.isfile(betik):
+            log(UYARI + "panel_ac.py bulunamadi (%s) - panel kisayolu yazilmadi" % ROOT)
+            return False
     yazildi = []
     for klasor in (_masaustu(),
                    os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows",
@@ -681,10 +687,11 @@ def kisayol_yaz() -> bool:
         if not klasor or not os.path.isdir(klasor):
             continue
         lnk = os.path.join(klasor, "Apprentice Panel.lnk")
+        arg = ('\"%s\"' % _ps_tirnak(betik)) if betik else ""
         ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s');"
-              "$s.TargetPath='%s';$s.Arguments='\"%s\"';$s.WorkingDirectory='%s';"
+              "$s.TargetPath='%s';$s.Arguments='%s';$s.WorkingDirectory='%s';"
               "$s.IconLocation='%s';$s.Description='Apprentice canli panel';$s.Save()"
-              % (_ps_tirnak(lnk), _ps_tirnak(hedef), _ps_tirnak(betik),
+              % (_ps_tirnak(lnk), _ps_tirnak(hedef), arg,
                  _ps_tirnak(ROOT), _ps_tirnak(hedef)))
         try:
             r = kos(["powershell", "-NoProfile", "-Command", ps], timeout=30)

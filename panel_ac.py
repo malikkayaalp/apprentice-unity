@@ -34,6 +34,23 @@ def bos_port(baslangic: int = 8788) -> int:
     return baslangic
 
 
+def native_kabuk(port: int) -> bool:
+    """Apprentice-Panel.exe (WebView2 kabugu): gercek uygulama penceresi - kendi ikonu,
+    kendi gorev cubugu kimligi, adres cubugu yok. Olculdu: sicak acilis 0.6 sn
+    (Edge --app: ~8 sn ilk acilis). Yoksa False doner, cagiran tarayici yoluna duser."""
+    for aday in (os.path.join(ROOT, "Apprentice-Panel.exe"),
+                 os.path.join(ROOT, "dist", "Apprentice-Panel.exe")):
+        if os.path.isfile(aday):
+            try:
+                subprocess.Popen([aday, "--kok", ROOT, "--port", str(port)], cwd=ROOT,
+                                 creationflags=PENCERESIZ, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
+            except Exception:
+                continue
+    return False
+
+
 def uygulama_penceresi(url: str) -> bool:
     """Chromium '--app=' kipi: adres cubugu/sekme YOK, kendi ikonuyla ayri pencere -
     tarayici gibi gorunmez, masaustu uygulamasi hissi. Edge/Chrome/Brave denenir.
@@ -116,6 +133,9 @@ def main() -> int:
             _hata("Panel sunucusu 10 sn icinde cevap vermedi (port %d)." % port)
             return 1
     url = "http://127.0.0.1:%d" % port
+    # Sira: native kabuk -> cercevesiz tarayici penceresi -> normal tarayici
+    if not tarayici_kipi and native_kabuk(port):
+        return 0
     if tarayici_kipi or not uygulama_penceresi(url):
         webbrowser.open(url)
     return 0

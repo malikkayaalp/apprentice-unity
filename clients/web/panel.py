@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # goruntuleyici modulu
 from izle import IsDeposu, olay_satiri, kanit_coz  # noqa: E402
 
 HOME = ""
@@ -635,6 +636,14 @@ class Istek(BaseHTTPRequestHandler):
             if yol.path == "/":
                 with open(SAYFA, encoding="utf-8") as f:
                     self._gonder(f.read(), "text/html; charset=utf-8")
+            elif yol.path == "/dosya":
+                # AYRI PENCERE goruntuleyici: dosya icerigi panel alanini kaplamasin
+                import goruntuleyici as G
+                self._gonder(G.sayfa(q.get("is", ""), q.get("yol", "")),
+                             "text/html; charset=utf-8")
+            elif yol.path == "/api/dosya":
+                import goruntuleyici as G
+                self._gonder(G.oku(DEPO.jobs_dir, q.get("is", ""), q.get("yol", "")))
             elif yol.path == "/api/hazir":
                 self._gonder({"hazir": True})       # baslatici bunu yoklar (anlik)
             elif yol.path == "/api/isler":

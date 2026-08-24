@@ -1,5 +1,35 @@
 # STATE.md — iş devri (en yeni üstte; kendi OpenMemory kuralımızın bu depoya uygulanması)
 
+## 2026-08-24 (gece 4): WebView2 native kabuk + panel cerceveye sigiyor
+
+**Kabuk (urunlesme adim 1):** shell/ApprenticePanel - C#/WinForms + WebView2. panel.html
+DEGISMEDI; yalniz kabuk. Kendi ikonu (assets/apprentice.ico, bagimliliksiz uretildi), kendi
+gorev cubugu kimligi, adres cubugu yok, pencere boyutu/konumu hatirlanir, kapaninca KENDI
+baslattigi sunucuyu durdurur (baskasininkine dokunmaz). Yabanci baglantilar varsayilan
+tarayiciya gider - kabuk tarayici degildir.
+OLCUM: sicak acilis **0.6 sn** (Edge --app: ~8 sn ilk acilis), soguk 5.9 sn (tek dosya acilimi
++ profil); bellek 569 MB (kabuk 152 + webview 386 + sunucu 31) - Edge --app 378 MB idi, yani
+~190 MB fazla; karsiliginda gercek uygulama kimligi. Exe 52 MB self-contained (kullanicida
+.NET GEREKMEZ; tek on kosul Windows'ta zaten bulunan WebView2). dotnet yoksa panel_build.py
+uyarir, sistem Edge --app yoluna duser (panel_ac.py sirasi: kabuk -> --app -> tarayici).
+Kisayol artik dogrudan kabugu gosterir; kur_build payload'a katar (Setup 12 -> 56 MB).
+
+**Panel cerceveye sigiyor (kullanici istegi):** "#alan" artik DIKEY KAYDIRILMAZ; yeni sigdir()
+gorunur panelleri 24 satira oranlayarak sokar, surukleme/boyutlandirma cerceve disina cikamaz.
+Yedi dizilim de yeniden yazildi ve 24x24'e sigacak sekilde dogrulandi.
+
+**Dosya goruntuleyici AYRI PENCERE:** izgaradaki "kod" paneli KALDIRILDI. Dosyaya tiklayinca
+/dosya?is=..&yol=.. sayfasi ayri pencerede acilir (native kabukta gercek ikinci uygulama
+penceresi - NewWindowRequested ile AltPencere). Icerik 2 sn'de bir tazelenir, DEGISEN SATIRLAR
+PARLAR; once diskten okunur (model sonradan degistirmis olabilir), yoksa son 'write' olayindan.
+Olay akisinda artik kod govdesi YOK - yalnizca "N satir - DOSYALAR panelinden ac" ozeti
+(kullanici: "akista kodu gormeye gerek yok, dosyalara tiklayarak gorebiliyoruz").
+
+**Test:** tests/test_panel.py'ye "yerlesim motoru" bolumu - itele/sikistir/sigdir algoritmasi
+Python'da birebir kosulup her dizilimin 24x24'e sigdigi ve cakismadigi dogrulanir (statik kutu
+denetimi yetmiyordu: motor kutulari degistiriyor). Ayrica kod panelinin kalkigi ve dosyanin
+ayri pencerede acildigi de sinaniyor.
+
 ## 2026-08-24 (gece 3): cirak calisma dizini = PROJE KOKU
 
 **Karar (kullanici onayladi):** panelden verilen isin calisma dizini artik varsayilan olarak

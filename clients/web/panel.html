@@ -57,7 +57,7 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
 #yerlesimSifirla:hover{color:var(--metin);border-color:var(--cizgi)}
 
 #alan{position:relative;height:calc(100% - 48px);font-size:calc(13px*var(--f));
-  overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
+  overflow-y:hidden;overflow-x:hidden}
 .kart{position:absolute;display:flex;flex-direction:column;
   border:1px solid var(--cizgi2);border-radius:13px;background:var(--panel);
   backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4);overflow:hidden;
@@ -330,11 +330,6 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
     <div class="kgovde"><div id="dosyaListe" style="flex:1;overflow-y:auto;padding:7px"></div></div>
     <div class="tutamak"></div></div>
 
-  <div class="kart" data-p="kod"><div class="kbaslik" style="color:var(--kod)">DOSYA GÖRÜNTÜLEYİCİ
-      <span class="kek" id="kodBaslik"></span></div>
-    <div class="kgovde"><div id="kodGoster" style="flex:1;overflow:auto;margin:8px;border-radius:10px;
-      background:rgba(12,10,8,.7)"></div></div>
-    <div class="tutamak"></div></div>
 </div>
 <input type="file" id="uEkSecici" multiple style="display:none">
 <input type="file" id="kEkSecici" multiple accept=".py,.md,.txt,.json,.csv,.html,.js,.ts,.cs,.yaml,.yml,.xml,.toml,.ini,.sql,.sh,.bat,.css" style="display:none">
@@ -378,60 +373,56 @@ const VARSAYILAN={
   isler:{gx:0,gy:0,gw:5,gh:24}, boru:{gx:5,gy:0,gw:12,gh:4},
   akis:{gx:5,gy:4,gw:12,gh:10}, cirak:{gx:5,gy:14,gw:12,gh:10},
   metrik:{gx:17,gy:0,gw:7,gh:5}, ozet:{gx:17,gy:5,gw:7,gh:5},
-  usta:{gx:17,gy:10,gw:7,gh:9}, dosyalar:{gx:17,gy:19,gw:7,gh:5},
-  kod:{gx:5,gy:24,gw:12,gh:10}};
+  usta:{gx:17,gy:10,gw:7,gh:9}, dosyalar:{gx:17,gy:19,gw:7,gh:5}};
 const PANEL_ADLARI={isler:"İŞLER",boru:"BORU HATTI",akis:"OLAY AKIŞI",cirak:"ÇIRAK",
-  metrik:"METRİKLER",ozet:"İŞ ÖZETİ",usta:"USTA · CLAUDE",dosyalar:"DOSYALAR",
-  kod:"DOSYA GÖRÜNTÜLEYİCİ"};
+  metrik:"METRİKLER",ozet:"İŞ ÖZETİ",usta:"USTA · CLAUDE",dosyalar:"DOSYALAR"};
 
 /* DIZILIM PRESETLERI: duruma gore hazir yerlesimler. Her biri {etiket, aciklama, gizli[], kutu{}}
    Kutuda ADI GECMEYEN panel otomatik gizlenir - dizilimler eksiksiz olmak zorunda degil. */
 const DIZILIMLER={
   dengeli:{etiket:"⚖ Dengeli (varsayılan)",aciklama:"her şey görünür",
-    gizli:["kod"],kutu:VARSAYILAN},
-  kodizle:{etiket:"👁 Kodu izle",aciklama:"canlı akış + yazılan dosyalar büyük",
+    gizli:[],kutu:VARSAYILAN},
+  kodizle:{etiket:"👁 Kodu izle",aciklama:"canlı akış geniş, dosyalar yanında",
     gizli:["usta","ozet"],kutu:{
-      isler:{gx:0,gy:0,gw:4,gh:24}, boru:{gx:4,gy:0,gw:20,gh:3},
-      akis:{gx:4,gy:3,gw:12,gh:21}, kod:{gx:16,gy:3,gw:8,gh:14},
-      dosyalar:{gx:16,gy:17,gw:8,gh:4}, metrik:{gx:16,gy:21,gw:8,gh:3},
-      cirak:{gx:4,gy:24,gw:12,gh:8}, usta:{gx:16,gy:24,gw:8,gh:8},
-      ozet:{gx:4,gy:32,gw:20,gh:5}}},
+      isler:{gx:0,gy:0,gw:4,gh:24},  boru:{gx:4,gy:0,gw:20,gh:3},
+      akis:{gx:4,gy:3,gw:13,gh:21},  cirak:{gx:17,gy:3,gw:7,gh:12},
+      dosyalar:{gx:17,gy:15,gw:7,gh:6}, metrik:{gx:17,gy:21,gw:7,gh:3},
+      usta:{gx:4,gy:3,gw:13,gh:10},  ozet:{gx:4,gy:13,gw:13,gh:11}}},
   sohbet:{etiket:"💬 Sohbet (usta + çırak)",aciklama:"iki sohbet yan yana, geniş",
-    gizli:["boru","metrik","ozet","kod","dosyalar"],kutu:{
-      isler:{gx:0,gy:0,gw:4,gh:24}, usta:{gx:4,gy:0,gw:10,gh:24},
-      cirak:{gx:14,gy:0,gw:10,gh:24}, akis:{gx:4,gy:24,gw:20,gh:8},
-      boru:{gx:4,gy:32,gw:10,gh:4}, metrik:{gx:14,gy:32,gw:10,gh:4},
-      ozet:{gx:4,gy:36,gw:10,gh:5}, dosyalar:{gx:14,gy:36,gw:10,gh:5},
-      kod:{gx:4,gy:41,gw:20,gh:10}}},
+    gizli:["boru","metrik","ozet","dosyalar","akis"],kutu:{
+      isler:{gx:0,gy:0,gw:4,gh:24},  usta:{gx:4,gy:0,gw:10,gh:24},
+      cirak:{gx:14,gy:0,gw:10,gh:24},
+      akis:{gx:4,gy:0,gw:10,gh:12},  boru:{gx:4,gy:12,gw:10,gh:4},
+      metrik:{gx:14,gy:0,gw:10,gh:5},ozet:{gx:14,gy:5,gw:10,gh:9},
+      dosyalar:{gx:14,gy:14,gw:10,gh:10}}},
   denetim:{etiket:"🔎 Denetim (kanıt odaklı)",aciklama:"boru hattı, metrik, özet, dosyalar",
-    gizli:["kod"],kutu:{
-      isler:{gx:0,gy:0,gw:4,gh:24}, boru:{gx:4,gy:0,gw:20,gh:6},
-      ozet:{gx:4,gy:6,gw:10,gh:9}, metrik:{gx:14,gy:6,gw:10,gh:9},
-      akis:{gx:4,gy:15,gw:13,gh:9}, dosyalar:{gx:17,gy:15,gw:7,gh:9},
-      cirak:{gx:4,gy:24,gw:13,gh:8}, usta:{gx:17,gy:24,gw:7,gh:8},
-      kod:{gx:4,gy:32,gw:20,gh:10}}},
-  cirakodak:{etiket:"🎯 Odak: çırak",aciklama:"tek iş, tam ekran çırak + akış",
-    gizli:["isler","boru","ozet","dosyalar","kod","usta"],kutu:{
+    gizli:["cirak"],kutu:{
+      isler:{gx:0,gy:0,gw:4,gh:24},  boru:{gx:4,gy:0,gw:20,gh:5},
+      ozet:{gx:4,gy:5,gw:10,gh:8},   metrik:{gx:14,gy:5,gw:10,gh:8},
+      akis:{gx:4,gy:13,gw:13,gh:11}, dosyalar:{gx:17,gy:13,gw:7,gh:6},
+      usta:{gx:17,gy:19,gw:7,gh:5},  cirak:{gx:4,gy:13,gw:13,gh:11}}},
+  cirakodak:{etiket:"🎯 Odak: çırak",aciklama:"tek iş, geniş çırak + akış",
+    gizli:["isler","boru","ozet","dosyalar","usta"],kutu:{
       cirak:{gx:0,gy:0,gw:14,gh:24}, akis:{gx:14,gy:0,gw:10,gh:19},
       metrik:{gx:14,gy:19,gw:10,gh:5},
-      isler:{gx:0,gy:24,gw:4,gh:10}, boru:{gx:4,gy:24,gw:20,gh:4},
-      usta:{gx:0,gy:28,gw:12,gh:8}, ozet:{gx:12,gy:28,gw:12,gh:8},
-      dosyalar:{gx:0,gy:36,gw:12,gh:5}, kod:{gx:12,gy:36,gw:12,gh:10}}},
+      isler:{gx:0,gy:0,gw:4,gh:24},  boru:{gx:0,gy:0,gw:14,gh:4},
+      usta:{gx:0,gy:4,gw:14,gh:10},  ozet:{gx:0,gy:14,gw:14,gh:10},
+      dosyalar:{gx:14,gy:0,gw:10,gh:8}}},
   ustaodak:{etiket:"🧠 Odak: usta",aciklama:"Claude geniş, çırak akışı yanında",
-    gizli:["boru","ozet","dosyalar","kod"],kutu:{
-      usta:{gx:0,gy:0,gw:14,gh:24}, isler:{gx:14,gy:0,gw:4,gh:24},
-      akis:{gx:18,gy:0,gw:6,gh:14}, cirak:{gx:18,gy:14,gw:6,gh:7},
+    gizli:["boru","ozet","dosyalar"],kutu:{
+      usta:{gx:0,gy:0,gw:14,gh:24},  isler:{gx:14,gy:0,gw:4,gh:24},
+      akis:{gx:18,gy:0,gw:6,gh:14},  cirak:{gx:18,gy:14,gw:6,gh:7},
       metrik:{gx:18,gy:21,gw:6,gh:3},
-      boru:{gx:0,gy:24,gw:24,gh:4}, ozet:{gx:0,gy:28,gw:12,gh:5},
-      dosyalar:{gx:12,gy:28,gw:12,gh:5}, kod:{gx:0,gy:33,gw:24,gh:10}}},
+      boru:{gx:0,gy:0,gw:14,gh:4},   ozet:{gx:0,gy:4,gw:14,gh:10},
+      dosyalar:{gx:0,gy:14,gw:14,gh:10}}},
   dar:{etiket:"📱 Dar ekran (tek sütun)",aciklama:"küçük pencere / dikey",
-    gizli:["boru","metrik","dosyalar","kod"],kutu:{
-      isler:{gx:0,gy:0,gw:24,gh:5}, akis:{gx:0,gy:5,gw:24,gh:9},
-      cirak:{gx:0,gy:14,gw:24,gh:10}, usta:{gx:0,gy:24,gw:24,gh:10},
-      ozet:{gx:0,gy:34,gw:24,gh:5}, boru:{gx:0,gy:39,gw:24,gh:4},
-      metrik:{gx:0,gy:43,gw:24,gh:4}, dosyalar:{gx:0,gy:47,gw:24,gh:5},
-      kod:{gx:0,gy:52,gw:24,gh:10}}}};
-let gizliPaneller=new Set(["kod"]);       // goruntuleyici: dosyaya tiklaninca acilir
+    gizli:["boru","metrik","dosyalar","ozet"],kutu:{
+      isler:{gx:0,gy:0,gw:24,gh:4},  akis:{gx:0,gy:4,gw:24,gh:8},
+      cirak:{gx:0,gy:12,gw:24,gh:6}, usta:{gx:0,gy:18,gw:24,gh:6},
+      ozet:{gx:0,gy:0,gw:24,gh:5},   boru:{gx:0,gy:5,gw:24,gh:4},
+      metrik:{gx:0,gy:9,gw:24,gh:4}, dosyalar:{gx:0,gy:13,gw:24,gh:5}}}};
+
+let gizliPaneller=new Set();   // kod paneli kaldirildi: dosyalar AYRI PENCEREDE acilir
 try{const g=JSON.parse(localStorage.getItem("apprentice_gizli_paneller"));
   if(g)gizliPaneller=new Set(g.filter(a=>PANEL_ADLARI[a]))}catch(e){}
 let gizliIsler=new Set();
@@ -517,7 +508,25 @@ function _uygula(){
     [...gizliPaneller].map(a=>'<option value="'+a+'">'+(PANEL_ADLARI[a]||a)+'</option>').join("");
   sec.style.display=gizliPaneller.size?"":"none";
 }
-function duzenle(){itele();sikistir();itele();uygula()}
+function sigdir(){
+  // KAYDIRMA YOK: gorunur paneller her zaman 24 satirlik cerceveye sigar. Tasarsa once
+  // yukselikler oranlanir, sonra sikistirilir; kalan tasma kirpilir. (Kullanici istegi:
+  // "paneller cercevenin disina tasmasin, scroll ile asagida kalan olmasin".)
+  const adlar=aktifAdlar(); if(!adlar.length)return;
+  const alt=()=>Math.max(...adlar.map(a=>yerlesim[a].gy+yerlesim[a].gh));
+  let koruma=0;
+  while(alt()>SATIR&&koruma++<10){
+    const k=SATIR/alt();
+    for(const a of adlar){const p=yerlesim[a];
+      p.gy=Math.max(0,Math.floor(p.gy*k));
+      p.gh=Math.max(2,Math.round(p.gh*k));}
+    sikistir(); itele(); sikistir();
+  }
+  for(const a of adlar){const p=yerlesim[a];
+    if(p.gy>SATIR-2)p.gy=SATIR-2;
+    if(p.gy+p.gh>SATIR)p.gh=Math.max(2,SATIR-p.gy);}
+}
+function duzenle(){itele();sikistir();itele();sigdir();uygula()}
 function kaydet(){localStorage.setItem("apprentice_yerlesim_v4",JSON.stringify(yerlesim))}
 function panelKaydet(){localStorage.setItem("apprentice_gizli_paneller",JSON.stringify([...gizliPaneller]))}
 window.addEventListener("resize",uygula);
@@ -592,7 +601,7 @@ document.querySelectorAll(".kart").forEach(k=>{
     surukluAd=ad; k.classList.add("tasiniyor");
     function tasi(ev){
       const ngx=Math.max(0,Math.min(SUTUN-p.gw,ox+Math.round((ev.clientX-sx)/h.w)));
-      const ngy=Math.max(0,oy+Math.round((ev.clientY-sy)/h.h));
+      const ngy=Math.max(0,Math.min(SATIR-p.gh,oy+Math.round((ev.clientY-sy)/h.h)));
       if(ngx!==p.gx||ngy!==p.gy){p.gx=ngx;p.gy=ngy;duzenle()}
     }
     function birak(){removeEventListener("pointermove",tasi);removeEventListener("pointerup",birak);
@@ -606,7 +615,7 @@ document.querySelectorAll(".kart").forEach(k=>{
     surukluAd=ad; k.classList.add("tasiniyor");
     function boyut(ev){
       const ngw=Math.max(3,Math.min(SUTUN-p.gx,ow+Math.round((ev.clientX-sx)/h.w)));
-      const ngh=Math.max(2,oh+Math.round((ev.clientY-sy)/h.h));
+      const ngh=Math.max(2,Math.min(SATIR-p.gy,oh+Math.round((ev.clientY-sy)/h.h)));
       if(ngw!==p.gw||ngh!==p.gh){p.gw=ngw;p.gh=ngh;duzenle()}
     }
     function birak(){removeEventListener("pointermove",boyut);removeEventListener("pointerup",birak);
@@ -644,7 +653,7 @@ function zenginMetin(m){
         .replace(/`([^`\n]+)`/g,'<code style="background:rgba(0,0,0,.35);padding:1px 5px;border-radius:5px;color:var(--vurgu2)">$1</code>')
         .replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
     }else if(kalan===1){
-      h+=kodBlok(p[i]||"kod",(p[i+1]||"").replace(/\n$/,"")); i++;
+      h+=kodBlok(p[i]||(p[i+1]||"").replace(/\n$/,"")); i++;
     }
   }
   return h;
@@ -713,7 +722,10 @@ function ekleOlay(o){
     '<span style="font-size:.7em;font-weight:700;letter-spacing:.5px;color:var(--'+ky[1]+
     ');border:1px solid var(--cizgi2);border-radius:5px;padding:0 5px;margin-right:7px;vertical-align:1px">'+
     ky[0]+'</span>'+kacir(o.metin||"");
-  if(o.kod)ic+=kodBlok(o.yol,o.kod,50);
+  // Olay akisinda kod GOSTERILMEZ (kullanici istegi): akis kisa kalsin, kod DOSYALAR
+  // panelinden tiklanip ayri pencerede acilsin. Yazim olayinda yalniz ozet satiri.
+  if(o.kod&&o.yol)ic+='<span style="color:var(--soluk);font-size:.85em"> ('+
+    o.kod.split("\n").length+' satır — DOSYALAR panelinden aç)</span>';
   if(o.ham&&["tool","tool_result","result","usta_rapor","baglam"].includes(o.tip)){
     const ham={...o.ham}; delete ham.sistem_metin;
     ic+='<details class="ham"><summary>ham veri</summary><pre>'+kacir(JSON.stringify(ham,null,1).slice(0,2500))+'</pre></details>';
@@ -746,10 +758,15 @@ function daktiloAdim(){
 
 /* --------------- dosyalar: liste + ayri goruntuleyici --------------- */
 function dosyaAc(ad){
+  // AYRI PENCERE: dosya icerigi panel alanini kaplamasin (kullanici istegi). Native kabukta
+  // gercek ikinci uygulama penceresi, tarayicida ayri pencere olarak acilir; icerik 2 sn'de
+  // bir tazelenir (model dosyayi yeniden yazarsa degisen satirlar parlar).
+  if(!seciliIs)return;
   seciliDosya=ad; dosyaElle=true;
-  gizliPaneller.delete("kod"); panelKaydet(); duzenle();
-  $("#kodBaslik").textContent=ad;
-  $("#kodGoster").innerHTML=kodBlok(ad,dosyalar[ad]||"");
+  const u="/dosya?is="+encodeURIComponent(seciliIs)+"&yol="+encodeURIComponent(ad);
+  const p=window.open(u,"apprentice_dosya_"+ad.replace(/[^\w]/g,"_"),
+                      "width=1020,height=760,menubar=no,toolbar=no,location=no,status=no");
+  if(!p)tost("pencere engellendi — tarayıcı ayarlarından açılır pencereye izin ver");
   dosyalarCiz();
 }
 function dosyalarCiz(){
@@ -765,15 +782,6 @@ function dosyalarCiz(){
     d.onclick=()=>dosyaAc(ad);
     kap.appendChild(d);
   });
-  // goruntuleyici acik ve secili dosya guncellendiyse tazele
-  if(seciliDosya&&dosyalar[seciliDosya]!==undefined&&!gizliPaneller.has("kod")){
-    const yeni=kodBlok(seciliDosya,dosyalar[seciliDosya]||"");
-    if($("#kodGoster").dataset.h!==String(dosyalar[seciliDosya].length)){
-      $("#kodGoster").innerHTML=yeni;
-      $("#kodGoster").dataset.h=String(dosyalar[seciliDosya].length);
-      $("#kodBaslik").textContent=seciliDosya;
-    }
-  }
 }
 
 /* --------------- is secimi + dongu --------------- */
@@ -782,10 +790,7 @@ function isSec(id){
   seciliIs=id; imlecN=0; olaylar=[]; dosyalar={}; seciliDosya=null; dosyaElle=false;
   daktiloHedef=""; daktiloCiz=0; t0=null; girisSonH=""; sonOzet={};
   $("#akis").innerHTML="";
-  const kg=$("#kodGoster");            // eski isin dosyasi ekranda kalmasin
-  if(kg){kg.innerHTML=""; kg.dataset.h="";}
-  const kb=$("#kodBaslik"); if(kb)kb.textContent="—";
-  dosyalarCiz();
+  dosyalarCiz();   // dosya goruntuleyici artik AYRI PENCERE: panelde temizlenecek alan yok
   $("#dmetin").innerHTML='<span class="bekliyor">bekleniyor…</span>';
 }
 async function isleriCek(){

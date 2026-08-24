@@ -120,9 +120,95 @@ def dizilimler_butun() -> bool:
                 assert not cak, "%s dizilimi: %s + %s cakisiyor" % (ad, gorunur[i], gorunur[j])
         for k, (gx, _gy, gw, _gh) in kutu.items():
             assert gx + gw <= 24, "%s/%s sutun tasmasi (%d+%d)" % (ad, k, gx, gw)
+        # KAYDIRMA YOK kurali: gorunur paneller 24 satirlik cerceveye SIGMALI
+        # (kullanici istegi: "paneller cercevenin disina tasmasin")
+        for k in gorunur:
+            gy, gh = kutu[k][1], kutu[k][3]
+            assert gy + gh <= 24, "%s/%s cerceve disina tasiyor (satir %d+%d)" % (ad, k, gy, gh)
         toplam += 1
     assert toplam >= 5, "beklenenden az dizilim dogrulandi: %d" % toplam
     print("dizilim presetleri: ok (%d dizilim, cakisma/tasma/eksik yok)" % toplam)
+    return True
+
+
+def yerlesim_motoru() -> bool:
+    """IZGARA MOTORUNU (itele + sikistir + sigdir) panel.html ile ayni kurallarla kosar ve
+    her dizilimin 24x24 cerceveye SIGDIGINI dogrular.
+
+    Kullanici kurali: "paneller cercevenin disina tasmasin, scroll ile asagida kalan olmasin."
+    Statik kutu denetimi yetmez - motor kutulari ittikce/sikistirdikca sonuc degisir; burada
+    ALGORITMANIN CIKTISI olculur."""
+    with open(SAYFA, encoding="utf-8") as f:
+        html = f.read()
+    SUTUN = SATIR = 24
+
+    def kutular(blok):
+        return {m.group(1): [int(x) for x in m.groups()[1:]]
+                for m in re.finditer(r"(\w+):\{gx:(\d+),gy:(\d+),gw:(\d+),gh:(\d+)\}", blok)}
+
+    vars_ = kutular(re.search(r"const VARSAYILAN=\{(.*?)\};", html, re.S).group(1))
+    diz = re.search(r"const DIZILIMLER=\{(.*?)\n\};", html, re.S).group(1)
+
+    def cakisir(a, b):
+        return not (a[0] + a[2] <= b[0] or b[0] + b[2] <= a[0]
+                    or a[1] + a[3] <= b[1] or b[1] + b[3] <= a[1])
+
+    def duzenle(yer, aktif):
+        for _ in range(300):                      # itele
+            degisti = False
+            for a in aktif:
+                for b in aktif:
+                    if a != b and cakisir(yer[a], yer[b]):
+                        yer[b][1] = yer[a][1] + yer[a][3]
+                        degisti = True
+            if not degisti:
+                break
+        for a in sorted(aktif, key=lambda x: yer[x][1]):    # sikistir
+            while yer[a][1] > 0:
+                yer[a][1] -= 1
+                if any(b != a and cakisir(yer[a], yer[b]) for b in aktif):
+                    yer[a][1] += 1
+                    break
+        for _ in range(10):                        # sigdir
+            alt = max(yer[a][1] + yer[a][3] for a in aktif)
+            if alt <= SATIR:
+                break
+            k = SATIR / alt
+            for a in aktif:
+                yer[a][1] = max(0, int(yer[a][1] * k))
+                yer[a][3] = max(2, round(yer[a][3] * k))
+        for a in aktif:
+            if yer[a][1] > SATIR - 2:
+                yer[a][1] = SATIR - 2
+            if yer[a][1] + yer[a][3] > SATIR:
+                yer[a][3] = max(2, SATIR - yer[a][1])
+        return yer
+
+    sayi = 0
+    for blok in re.split(r"\n  (?=\w+:\{etiket:)", diz):
+        m = re.match(r"\s*(\w+):\{etiket:", blok)
+        if not m:
+            continue
+        ad = m.group(1)
+        g = re.search(r"gizli:\[(.*?)\]", blok, re.S)
+        gizli = set(re.findall(r'"(\w+)"', g.group(1))) if g else set()
+        kut = kutular(blok) or {k: list(v) for k, v in vars_.items()}
+        yer = {k: list(v) for k, v in kut.items()}
+        aktif = [k for k in yer if k not in gizli]
+        assert aktif, "%s: gorunur panel yok" % ad
+        yer = duzenle(yer, aktif)
+        for i, a in enumerate(aktif):
+            for b in aktif[i + 1:]:
+                assert not cakisir(yer[a], yer[b]), "%s: %s + %s cakisiyor (motor sonrasi)" % (ad, a, b)
+        alt = max(yer[a][1] + yer[a][3] for a in aktif)
+        sag = max(yer[a][0] + yer[a][2] for a in aktif)
+        assert alt <= SATIR, "%s: %d satir - cerceve disina tasiyor (kaydirma gerekir)" % (ad, alt)
+        assert sag <= SUTUN, "%s: %d sutun - saga tasiyor" % (ad, sag)
+        sayi += 1
+    # kod paneli kaldirildi mi (dosyalar AYRI PENCEREDE acilir)
+    assert 'data-p="kod"' not in html, "kod paneli hala izgarada"
+    assert "/dosya?is=" in html, "dosya ayri pencerede acilmiyor (window.open yolu yok)"
+    print("yerlesim motoru: ok (%d dizilim 24x24 cerceveye sigdi, kod paneli yok)" % sayi)
     return True
 
 
@@ -234,7 +320,7 @@ def calisma_dizini_kurallari() -> bool:
 
 def main() -> int:
     ok = (js_sozdizimi() and yerlesim_butun() and dizilimler_butun()
-          and sunucu_uclari() and calisma_dizini_kurallari())
+          and yerlesim_motoru() and sunucu_uclari() and calisma_dizini_kurallari())
     print("SONUC:", "GECTI" if ok else "KALDI")
     return 0 if ok else 1
 
