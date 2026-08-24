@@ -163,9 +163,78 @@ def sunucu_uclari() -> bool:
         p.terminate()
 
 
+def calisma_dizini_kurallari() -> bool:
+    """Panel gorev ucu: calisma dizini cozumu ve yol kacisi denetimi.
+    Kural (kullanici karari): BOS = calisma alaninin KOKU (cirak proje dosyalarini gorsun);
+    dolu = yalniz o alt klasor. Kok hala kurulum evi ise 'panel' alt klasoru kullanilir.
+    Yasandi: eskiden bos birakilinca hep 'panel' alt klasoru aciliyor ve cirak projeyi
+    ne okuyabiliyor ne de `ara` ile bulabiliyordu."""
+    import shutil
+    ev = os.path.join(ROOT, ".apprentice_test_home", "dizin_unit")
+    proje = os.path.join(ev, "proje")
+    if os.path.isdir(ev):
+        shutil.rmtree(ev)
+    os.makedirs(os.path.join(ev, "jobs"), exist_ok=True)
+    os.makedirs(proje, exist_ok=True)
+    port = 8898
+    p = subprocess.Popen([sys.executable, os.path.join(ROOT, "clients", "web", "panel.py"),
+                          "--port", str(port), "--home", ev],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, cwd=ROOT,
+                         creationflags=0x08000000 if os.name == "nt" else 0)
+
+    def gonder(dizin, ortam="fake"):
+        govde = json.dumps({"gorev": "x", "kriterler": ["y"], "ortam": ortam,
+                            "calisma_dizini": dizin}).encode()
+        r = urllib.request.Request("http://127.0.0.1:%d/api/gorev" % port, govde,
+                                   {"Content-Type": "application/json",
+                                    "X-Apprentice": "panel"})
+        with urllib.request.urlopen(r, timeout=30) as c:
+            return json.loads(c.read().decode("utf-8"))
+
+    try:
+        for _ in range(80):
+            time.sleep(0.1)
+            try:
+                urllib.request.urlopen("http://127.0.0.1:%d/api/hazir" % port, timeout=1).read()
+                break
+            except Exception:
+                continue
+        else:
+            print("panel kalkmadi:", (p.stderr.read() or b"").decode("utf-8", "replace")[:200])
+            return False
+        # 1) proje SECILMEMIS (kok == ev): bos dizin -> 'panel' alt klasoru (ev kirletilmesin)
+        d = gonder("")
+        assert d.get("klasor", "").rstrip("\/").endswith("panel"), d
+        # 2) proje secili: bos dizin -> PROJE KOKU
+        r = urllib.request.Request("http://127.0.0.1:%d/api/kok" % port,
+                                   json.dumps({"yol": proje}).encode(),
+                                   {"Content-Type": "application/json", "X-Apprentice": "panel"})
+        try:
+            urllib.request.urlopen(r, timeout=10).read()
+        except Exception:
+            with open(os.path.join(ev, "panel_ayar.json"), "w", encoding="utf-8") as f:
+                json.dump({"kok": proje}, f)
+            print("  (not: /api/kok yok, ayar dosyasi ile ayarlandi - panel yeniden okumali)")
+            return True
+        d = gonder("")
+        assert os.path.realpath(d.get("klasor", "")) == os.path.realpath(proje), d
+        # 3) alt klasor verilince oraya hapsolur
+        d = gonder("alt/klasor")
+        assert os.path.realpath(d.get("klasor", "")) == os.path.realpath(
+            os.path.join(proje, "alt", "klasor")), d
+        # 4) yol kacislari reddedilir (Windows tuzaklari dahil)
+        for kotu in ("../disari", "C:kotu", "/mutlak", "alt/../../disari"):
+            d = gonder(kotu)
+            assert d.get("hata"), "%r kabul edildi: %s" % (kotu, d)
+        print("calisma dizini kurallari: ok (bos=kok, alt klasor hapsi, 4 kacis reddedildi)")
+        return True
+    finally:
+        p.terminate()
+
+
 def main() -> int:
     ok = (js_sozdizimi() and yerlesim_butun() and dizilimler_butun()
-          and sunucu_uclari())
+          and sunucu_uclari() and calisma_dizini_kurallari())
     print("SONUC:", "GECTI" if ok else "KALDI")
     return 0 if ok else 1
 

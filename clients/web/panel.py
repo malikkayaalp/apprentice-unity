@@ -238,16 +238,36 @@ def _gorev_baslat(veri: dict) -> dict:
         return {"hata": "bilinmeyen ortam %r (var: %s)" % (ortam, list(srv.ENVS))}
     dogrulama = str(veri.get("dogrulama") or "derleme")
     kapali_ek = ["run_tests", "run_shell"] if dogrulama == "derleme" else []
-    # calisma dizini SECILI CALISMA ALANINA gore cozulur (kullanicinin proje klasoru;
-    # ust bardaki klasor secici belirler, varsayilan panel evi)
-    dizin = str(veri.get("calisma_dizini") or "panel").strip().replace("\\", "/")
+    # CALISMA DIZINI = calisma alani (ust bardaki 📁) + istege bagli ALT KLASOR.
+    # Varsayilan artik ALT KLASOR YOK: cirak dogrudan projenin kokunde calisir. Sebep
+    # (kullanici sordu, olculdu): hapis kokii is dizinidir; eskiden bos birakilinca "panel"
+    # alt klasoru aciliyor ve cirak projenin KENDI dosyalarini ne okuyabiliyor ne de `ara`
+    # ile bulabiliyordu - "projeye bagladim ama model projeyi gormuyor" hali.
+    # Istisna: calisma alani hala kurulum evi ise (proje secilmemis) evi kirletmemek icin
+    # "panel" alt klasoru kullanilir.
+    kok = AYAR.get("kok", HOME)
+    ham_dizin = str(veri.get("calisma_dizini") or "").strip().replace("\\", "/")
+    # MUTLAK/SURUCU-GORELI yol HAM haliyle denetlenir: bastaki "/" once kirpilirsa "/mutlak"
+    # sessizce "mutlak" olup koke goreli sayilirdi (hapisten cikmaz ama sasirtici).
+    # NOT: Python 3.13'te ntpath.isabs("/x") artik False donuyor (surucusuz koklu yol) -
+    # bastaki egik cizgi ACIKCA denetlenmeli, yoksa "/mutlak" sessizce koke goreli sayilir.
+    if ham_dizin and (ham_dizin.startswith("/") or os.path.isabs(ham_dizin)
+                      or os.path.splitdrive(ham_dizin)[0]
+                      or ".." in ham_dizin.split("/")):
+        return {"hata": "calisma_dizini calisma alanina goreli bir ALT KLASOR olmali "
+                        "(bos birak = proje koku)"}
+    dizin = os.path.normpath(ham_dizin.strip("/")) if ham_dizin.strip("/") else ""
+    if dizin == ".":
+        dizin = ""
+    if not dizin and os.path.realpath(kok) == os.path.realpath(HOME):
+        dizin = "panel"
     # Windows tuzagi: "C:foo" SURUCU-GORELI yoldur - os.path.isabs() False der ama join
     # calisma alanini tamamen yok sayar (olculdu: ntpath.join(r"D:\ws","C:foo") == "C:foo").
     # Bu yuzden surucu harfi de reddedilir.
     if ".." in dizin or os.path.isabs(dizin) or os.path.splitdrive(dizin)[0]:
         return {"hata": "calisma_dizini calisma alanina goreli olmali"}
-    tam_dizin = os.path.join(AYAR.get("kok", HOME), dizin)
-    kok_ger = os.path.realpath(AYAR.get("kok", HOME))
+    tam_dizin = os.path.join(kok, dizin) if dizin else kok
+    kok_ger = os.path.realpath(kok)
     if os.path.realpath(tam_dizin) != kok_ger and \
             not os.path.realpath(tam_dizin).startswith(kok_ger + os.sep):
         return {"hata": "calisma_dizini calisma alani disina cikiyor"}
@@ -309,7 +329,9 @@ def _gorev_baslat(veri: dict) -> dict:
             json.dump(b[-10:], f)
     except OSError:
         pass
-    return {"is_id": job.id, "baslik": baslik}
+    # klasoru geri bildir: kullanici isin NEREYE yazdigini panelde gorsun
+    return {"is_id": job.id, "baslik": baslik, "klasor": tam_dizin,
+            "ekler_red": ek_red}
 
 
 def _ollama_get(yol: str, govde: dict | None = None):

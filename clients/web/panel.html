@@ -257,7 +257,7 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
         <label class="kutucuk"><input type="checkbox" id="kHarita"> harita</label>
         <details><summary>▸ ayrıntı: dizin · yazılabilir · kriterler · başlık</summary>
           <div class="icra">
-            <input type="text" id="kDizin" placeholder="çalışma dizini" style="width:130px">
+            <input type="text" id="kDizin" placeholder="alt klasör (boş = proje kökü)" style="width:170px" title="Boş bırak: çırak doğrudan çalışma alanının (📁) kökünde çalışır — proje dosyalarını okuyabilir. Bir ad yazarsan çırak yalnız o alt klasöre hapsolur.">
             <input type="text" id="kYaz" placeholder="yazılabilir (virgülle)" style="width:170px">
             <input type="text" id="kBaslik" placeholder="başlık" style="width:130px">
             <input type="text" id="kKriter" placeholder="kriterler ( ; ile ayır)" style="flex:1;min-width:200px">
@@ -1071,7 +1071,8 @@ async function cirakGonder(){
     else{
       $("#kGorev").value=""; $("#kBaslik").value=""; $("#kKriter").value="";
       kEkler=[]; eklerCiz(kEkler,"#kEkler");
-      tost("🔧 "+(r.baslik||r.is_id)+" başladı"); otoSec=true; dibeKilit=true;
+      tost("🔧 "+(r.baslik||r.is_id)+" başladı — 📁 "+(r.klasor||"")); otoSec=true; dibeKilit=true;
+      if(r.ekler_red&&r.ekler_red.length)tost("⚠ eklenmedi: "+r.ekler_red.join(", "));
     }
   }catch(e){tost("HATA: "+e);}
   b.disabled=false;

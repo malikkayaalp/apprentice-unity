@@ -1,5 +1,27 @@
 # STATE.md — iş devri (en yeni üstte; kendi OpenMemory kuralımızın bu depoya uygulanması)
 
+## 2026-08-24 (gece 3): cirak calisma dizini = PROJE KOKU
+
+**Karar (kullanici onayladi):** panelden verilen isin calisma dizini artik varsayilan olarak
+CALISMA ALANININ KOKU (ust bardaki 📁). Eskiden bos birakilinca "panel" alt klasoru aciliyordu;
+hapis kokii is dizini oldugu icin cirak projenin KENDI dosyalarini ne read_file ile okuyabiliyor
+ne de `ara` (RAG) ile bulabiliyordu - "projeye bagladim ama model projeyi gormuyor" hali.
+
+- Bos alan  -> proje koku (cirak mevcut kodu okur, RAG projeyi indeksler)
+- Dolu alan -> yalniz o ALT KLASOR (hapis daralir; "sadece src/oyun'da calis" senaryosu)
+- Kok hala kurulum evi ise (proje SECILMEMIS) evi kirletmemek icin yine "panel" alt klasoru
+- Yanit artik `klasor` doner; panel tostu isin NEREYE yazdigini gosterir, reddedilen ekleri de
+  bildirir (eskiden ek sessizce dusuyordu)
+
+**Yol denetimi (Windows tuzaklari):** "../disari", "C:kotu" (surucu-goreli), "/mutlak",
+"alt/../../disari" reddedilir. NOT: Python 3.13'te ntpath.isabs("/x") artik **False** donuyor -
+bastaki egik cizgi ACIKCA denetlenmeli (yoksa sessizce koke goreli sayilir). Ayrica realpath
+kapsama kontrolu ikinci katman olarak duruyor.
+
+**Kanit (canli):** ProjectTest kokunde onceden duran mevcut_modul.py -> cirak onu read_file ile
+OKUDU, kdv_ekle'yi kullanan fis.py yazdi, fis_toplami([{tutar:100}]) == 118.0 dogru cikti ve
+mevcut dosyaya dokunmadi. tests/test_panel.py "calisma dizini kurallari" bolumu bunu korur.
+
 ## 2026-08-24 (gece 2): derin denetim + dizilim presetleri
 
 **Yapilan:** dort paralel denetci (kurulum / panel arka uc / panel on uc / cekirdek) tum yapiyi
