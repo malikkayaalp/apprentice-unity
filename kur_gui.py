@@ -8,7 +8,7 @@ Gelistirme: python kur_gui.py  (payload yerine bu depo klasoru kopyalanir)
 Paketleme: python kur_build.py  ->  dist/Apprentice-Setup.exe
 """
 from __future__ import annotations
-import os, sys, threading, zipfile, webbrowser, shutil, queue
+import os, subprocess, sys, threading, zipfile, webbrowser, shutil, queue
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -26,7 +26,7 @@ FONT = "Segoe UI" if os.name == "nt" else "Helvetica"
 
 ADIMLAR = [("dosyalar", "Apprentice dosyaları"), ("python", "Python"), ("ollama", "Ollama"),
            ("model", "Yerel model (Qwen3-Coder-Next, ~20 GB)"), ("ide", "IDE bağlantıları"),
-           ("test", "Öz-test")]
+           ("cli", "Ajan CLI'ları"), ("kisayol", "Panel kısayolu"), ("test", "Öz-test")]
 
 
 def dosyalari_ac(kok: str, log) -> bool:
@@ -59,8 +59,9 @@ class Sihirbaz(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Apprentice Setup")
-        self.geometry("820x560")
-        self.minsize(760, 520)
+        self.geometry("980x640")
+        self.minsize(940, 600)   # dar pencerede "Kur"
+        # dugmesi "K"ya kirpiliyordu (yasandi): alt satirdaki dort dugme sigmali
         self.kuyruk = queue.Queue()
         self.durum = {k: "bekliyor" for k, _ in ADIMLAR}
         self.ollama_eksik = False
@@ -182,8 +183,10 @@ class Sihirbaz(tk.Tk):
         alt = ttk.Frame(self, padding=(16, 8))
         alt.pack(fill="x")
         self.btn_ollama = ttk.Button(alt, text="Ollama'yı indir", command=lambda: webbrowser.open("https://ollama.com/download"))
-        self.btn_kural = ttk.Button(alt, text="Projeye denetçi kuralı ekle…", command=self._kural)
+        self.btn_kural = ttk.Button(alt, text="Bir projeye bağla…", command=self._kural)
         self.btn_kural.pack(side="left")
+        self.btn_panel = ttk.Button(alt, text="Paneli aç", command=self._panel)
+        self.btn_panel.pack(side="left", padx=(8, 0))
         ttk.Label(alt, text="Proje klasörüne .cursor/rules/apprentice.mdc + APPRENTICE.md yazar; IDE o projede\n"
                             "usta rolünü otomatik uygular (kodu kendisi yazmaz, worker_run'a verir).",
                   style="Alt.TLabel", font=(FONT, 8)).pack(side="left", padx=(10, 0))
@@ -293,6 +296,8 @@ class Sihirbaz(tk.Tk):
             else:
                 calistir("model", kur.kontrol_model)
             calistir("ide", lambda: (kur.kontrol_ideler(""), kur.mcp_json_guncelle())[0])
+            calistir("cli", kur.kontrol_cli)
+            calistir("kisayol", kur.kisayol_yaz)
             calistir("test", kur.oz_test)
         except Exception as e:  # noqa: BLE001
             import traceback
@@ -310,15 +315,99 @@ class Sihirbaz(tk.Tk):
         if self.ollama_eksik:
             self.btn_ollama.pack(side="left", padx=(8, 0))
         if all(sonuc.get(k) for k, _ in ADIMLAR):
-            self.ilerle(100, "Kurulum tamam. IDE'ni aç; MCP listesinde 'apprentice' yeşil olmalı.")
-            messagebox.showinfo("Apprentice", "Kurulum tamamlandı.\n\nIDE'ni (Cursor / VS Code / Windsurf) aç ya da "
-                                "yenile; MCP listesinde 'apprentice' görünecek.\n\nBir projede kullanmak için "
-                                "'Projeye denetçi kuralı ekle' ile projeyi seç.")
+            self.ilerle(100, "Kurulum tamam.")
+            self._ozet_penceresi()
         else:
             eksik = [dict(ADIMLAR)[k] for k, _ in ADIMLAR if not sonuc.get(k)]
             self.ilerle(0, "Eksik: " + ", ".join(eksik) + " — ayrıntı panelindeki [X] satırlarına bak.")
 
+    def _ozet_penceresi(self):
+        """Kurulum sonrasi 'ne kuruldu, nasil kullanirim' paneli - tema uyumlu, tek ekran,
+        gezinme yok (kullanici istegi: net ama gereksiz gezdirmeden anlat)."""
+        kok = self.kok_var.get().strip()
+        kur = sys.modules.get("kur")
+        ideler, cliler = [], []
+        try:
+            for ad, (_yol, _a, kurulu) in kur.ide_listesi().items():
+                if os.path.isdir(kurulu):
+                    ideler.append(ad)
+            for ad, _acik, _b in kur.CLI_ADAYLARI:
+                if shutil.which(ad):
+                    cliler.append(ad)
+        except Exception:
+            pass
+        w = tk.Toplevel(self)
+        w.title("Apprentice — kurulum tamam")
+        w.configure(bg=T["bg"]); w.geometry("780x640"); w.transient(self)
+        ttk.Label(w, text="✦  Kurulum tamamlandı", style="Baslik.TLabel").pack(anchor="w", padx=22, pady=(18, 2))
+        ttk.Label(w, text="Çırak (yerel model) hazır. Üç yoldan biriyle kullan:",
+                  style="Alt.TLabel").pack(anchor="w", padx=22, pady=(0, 10))
+        kut = tk.Text(w, bg=T["panel"], fg=T["metin"], relief="flat", wrap="word",
+                      font=(FONT, 10), padx=16, pady=12, height=22, borderwidth=0)
+        kut.pack(fill="both", expand=True, padx=18)
+        kut.tag_configure("bas", foreground=T["vurgu2"], font=(FONT, 11, "bold"))
+        kut.tag_configure("soluk", foreground=T["soluk"])
+        kut.tag_configure("ok", foreground=T["ok"])
+
+        def y(metin, tag=""):
+            kut.insert("end", metin + "\n", tag)
+        y("1) WEB PANELİ — en kolay yol", "bas")
+        y("   Masaüstündeki “Apprentice Panel” kısayolu (ya da aşağıdaki “Paneli aç”).")
+        y("   Tarayıcıda: çırağa görev/sohbet, Claude'a (usta) prompt, canlı kod akışı,", "soluk")
+        y("   yazılan dosyalar, metrikler, boru hattı. Modeli anlık izlersin.", "soluk")
+        y("")
+        y("2) IDE İÇİNDEN (MCP)", "bas")
+        y("   Bulunan ve bağlanan: " + (", ".join(ideler) if ideler else "—"), "ok")
+        y("   IDE'yi aç/yenile → MCP listesinde “apprentice” görünür. Sohbette", "soluk")
+        y("   “şunu çırağa yaptır” dersin; usta worker_run ile çırağı çalıştırıp doğrular.", "soluk")
+        y("   Claude Code: kurulum klasöründe “claude” aç — .mcp.json hazır.", "soluk")
+        y("")
+        y("3) KOMUT SATIRI CLI'LARI", "bas")
+        y("   Sistemde bulunanlar: " + (", ".join(cliler) if cliler else "—"), "ok")
+        y("   Panelin USTA bölümü “claude”u başsız çağırır (model + effort seçilebilir);", "soluk")
+        y("   “özel CLI” alanına kendi komutunu yazarak (ör. gemini -p {prompt}) başka", "soluk")
+        y("   bir ajanı da usta olarak bağlayabilirsin.", "soluk")
+        y("")
+        y("BİR PROJEYE BAĞLAMAK", "bas")
+        y("   “Bir projeye bağla…” düğmesi, seçtiğin projeye AGENTS.md + Cursor kuralı yazar;", "soluk")
+        y("   o projede usta kod işini kendiliğinden çırağa verir.", "soluk")
+        y("")
+        y("KURULUM KLASÖRÜ", "bas"); y("   " + kok, "soluk")
+        kut.configure(state="disabled")
+        # kullanici istegi: kurulum bitince panel KENDILIGINDEN acilsin (cerçevesiz
+        # uygulama penceresi; Edge/Chrome yoksa normal tarayici)
+        self.after(600, self._panel)
+        alt = ttk.Frame(w, padding=(18, 12)); alt.pack(fill="x")
+        ttk.Button(alt, text="Paneli yeniden aç", style="Vurgu.TButton",
+                   command=self._panel).pack(side="left")
+        ttk.Button(alt, text="Bir projeye bağla…",
+                   command=lambda: (w.destroy(), self._kural())).pack(side="left", padx=8)
+        ttk.Button(alt, text="Kapat", command=w.destroy).pack(side="right")
+
+    def _panel(self):
+        """Web panelini baslat + tarayiciyi ac (konsolsuz)."""
+        kok = self.kok_var.get().strip()
+        betik = os.path.join(kok, "panel_ac.py")
+        if not os.path.isfile(betik):
+            messagebox.showwarning("Apprentice", "Once kurulumu tamamla (panel_ac.py bulunamadi).")
+            return
+        try:
+            import kur as _kur
+            py = _kur.sistem_python() or sys.executable
+            pyw = os.path.join(os.path.dirname(py), "pythonw.exe")
+            subprocess.Popen([pyw if os.path.isfile(pyw) else py, betik], cwd=kok,
+                             creationflags=0x08000000 if os.name == "nt" else 0,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+            self.log("[ok]  Panel baslatildi - tarayici birkac saniye icinde acilir")
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Apprentice", "Panel baslatilamadi: %s" % e)
+
     def _kural(self):
+        """Secilen PROJE klasorune usta (denetci) kurallarini yazar: AGENTS.md + Cursor .mdc
+        (+ .github varsa Copilot yonlendirmesi). Boylece o projede IDE'nin modeli 'kod yazma
+        isini worker_run ile ciraga ver, sen dogrula' seklinde davranir - kullanici her seferinde
+        anlatmak zorunda kalmaz."""
         kur = sys.modules.get("kur")
         if kur is None:
             kok = self.kok_var.get().strip()
@@ -330,7 +419,16 @@ class Sihirbaz(tk.Tk):
             import importlib
             kur = importlib.import_module("kur")
             kur.set_root(kok); kur.log = self.log
-        d = filedialog.askdirectory(title="Kural eklenecek proje klasörü")
+        if not messagebox.askokcancel("Bir projeye bağla",
+                "Seçeceğin PROJE klasörüne usta (denetçi) kuralları yazılır:\n"
+                "  • AGENTS.md — tüm ajanların okuduğu ortak kural\n"
+                "  • .cursor/rules/apprentice.mdc — Cursor otomatik uygular\n"
+                "  • .github varsa Copilot yönlendirmesi\n\n"
+                "Ne işe yarar: o projede IDE'nin modeli (usta) kod yazma işini worker_run ile "
+                "ÇIRAĞA verir, kendisi çalıştırarak doğrular. Sen her seferinde bunu anlatmak "
+                "zorunda kalmazsın.\n\nDevam edip proje klasörünü seçelim mi?"):
+            return
+        d = filedialog.askdirectory(title="Kural eklenecek PROJE klasörü (Apprentice kurulumu değil)")
         if not d:
             return
         try:

@@ -261,7 +261,9 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
             <input type="text" id="kBaslik" placeholder="başlık" style="width:130px">
             <input type="text" id="kKriter" placeholder="kriterler ( ; ile ayır)" style="flex:1;min-width:200px">
           </div></details>
-        <div id="kModelKart" style="width:100%;font-size:.68em;color:var(--soluk);line-height:1.5"></div>
+        <div id="kModelKart" style="width:100%;font-size:.68em;color:var(--soluk);line-height:1.5">
+        önerilen: <b style="color:var(--vurgu2)">Qwen3-Coder-Next (unsloth UD-Q4_K_XL)</b> + usta olarak Claude —
+        başka model de seçebilirsin; ayarlar (ctx, düşünme) modelin kartına göre uyarlanır.</div>
       </div>
       <div id="dmetin"><span class="bekliyor">görevi aşağıdan yaz — canlı kipte token akışı burada akar…</span></div>
       <div class="sohbet" id="cirakChat" style="display:none"></div>
@@ -819,7 +821,9 @@ $("#kModel").onchange=async e=>{
     kap.innerHTML="kart: aile <b>"+(k.aile||"?")+"</b> · ctx <b>"+(k.ctx||"?")+
       "</b> · yetenekler: "+(k.yetenekler||[]).join(",")+
       (Object.keys(p).length?" · önerilen: "+Object.entries(p).map(([a,b])=>a+"="+b).join(" "):"")+
-      " <span style='color:var(--sari)'>(işçide temperature=0 — determinizm; ctx karta göre sınırlanır)</span>";
+      " <span style='color:var(--sari)'>(işçide temperature=0 — determinizm; ctx karta göre sınırlanır"+
+      ((k.yetenekler||[]).includes("thinking")?"; DÜŞÜNEN model — düşünme kapalı koşar, ölçüldü: açıkken boşa token":"")+
+      ((k.yetenekler||[]).includes("tools")?"":"; ⚠ ARAÇ DESTEĞİ YOK — görev kipi çalışmayabilir, sohbet kipi olur")+")</span>";
   }catch(e){}
 };
 $("#kMod").onchange=e=>{

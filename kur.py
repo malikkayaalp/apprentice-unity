@@ -16,8 +16,10 @@ Adimlar:
   4  IDE'ler: kurulu olan her IDE'nin MCP ayarina "apprentice" girdisi (diger girdilere dokunmaz)
      Claude Code: depodaki .mcp.json zaten yeterli
   5  Ruff (istege bagli): yazim-ani F-sinifi kanit icin; kurulamazsa is surer
-  6  Oz-test: sunucuyla el sikisma + fake ortamda bir tur (model gerekmez)
-  7  (istege bagli) num_batch olcumu -> apprentice.config.json
+  6  CLI taramasi: claude/codex/gemini/copilot/cursor-agent/ollama - hangileri kurulu
+  7  Panel kisayolu: masaustu/Baslat -> "Apprentice Panel" (konsolsuz, tarayicida acar)
+  8  Oz-test: sunucuyla el sikisma + fake ortamda bir tur (model gerekmez)
+  9  (istege bagli) num_batch olcumu -> apprentice.config.json
 """
 from __future__ import annotations
 import argparse, json, os, platform, shutil, subprocess, sys, time, urllib.request, urllib.error
@@ -215,6 +217,89 @@ def kontrol_ollama() -> bool:
 
 
 # ------------------------------------------------------------------ 3 model
+ONERILEN_MODEL = "hf.co/unsloth/Qwen3-Coder-Next-GGUF:UD-Q4_K_XL"
+
+
+def model_karti(ad: str) -> dict:
+    """Ollama /api/show: yetenekler (thinking/tools), ctx siniri, onerilen parametreler."""
+    try:
+        req = urllib.request.Request(ollama_url() + "/api/show",
+                                     json.dumps({"model": ad}).encode("utf-8"),
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.load(r)
+    except Exception:
+        return {}
+    ctx = None
+    for k, v in (d.get("model_info") or {}).items():
+        if k.endswith("context_length"):
+            ctx = v
+    par = {}
+    for satir in (d.get("parameters") or "").splitlines():
+        p = satir.split(None, 1)
+        if len(p) == 2:
+            par[p[0]] = p[1].strip('"')
+    return {"ctx": ctx, "yetenekler": d.get("capabilities") or [], "parametreler": par,
+            "aile": (d.get("details") or {}).get("family", "")}
+
+
+def model_uygula(ad: str) -> bool:
+    """Secilen modeli apprentice.config.json'a yaz ve KARTINA gore optimize et:
+    - ctx: kart siniriyla kisilir (kucuk modelde 128k istemek hata verir - olculdu)
+    - think: model 'thinking' yetenegine sahipse acikca KAPATILIR (olculdu: acik kalinca
+      gorev basina ~3900 dusunme tokeni yandi, kazanc yok) - kullanici isterse elle acar
+    - temperature: 0 (determinizm; kart onerisi bilgi olarak loglanir)"""
+    kart = model_karti(ad)
+    p = os.path.join(ROOT, "apprentice.config.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        sablon = os.path.join(ROOT, "apprentice.config.template.json")
+        try:
+            with open(sablon, encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+    oll = cfg.setdefault("ollama", {})
+    oll["model"] = ad
+    istek_ctx = int(oll.get("num_ctx") or 131072)
+    if kart.get("ctx"):
+        oll["num_ctx"] = min(istek_ctx, int(kart["ctx"]))
+    oll["temperature"] = 0.0
+    dusunen = "thinking" in (kart.get("yetenekler") or [])
+    oll["think"] = False
+    try:
+        with open(p, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=1)
+    except OSError as e:
+        log(HATA + "config yazilamadi: %s" % e)
+        return False
+    log(OK + "Model ayarlandi: %s  (ctx %s%s%s)"
+        % (ad.split("/")[-1], oll.get("num_ctx"),
+           ", dusunen model -> think KAPALI (olculdu: acikken bosa token)" if dusunen else "",
+           ", araclar var" if "tools" in (kart.get("yetenekler") or []) else
+           ", ARAC DESTEGI YOK - isci kipi calismayabilir"))
+    if kart.get("parametreler"):
+        log(BILGI + "kart onerisi: %s (isci koşusunda temperature=0 kullaniriz - determinizm)"
+            % " ".join("%s=%s" % kv for kv in list(kart["parametreler"].items())[:4]))
+    return True
+
+
+def model_raporu():
+    """Yerel modelleri listele + oneriyi soyle. Kullanici baska model secebilir."""
+    try:
+        adlar = ollama_tags()
+    except Exception:
+        return
+    kod = [a for a in adlar if not any(x in a.lower() for x in ("bge", "embed", "nomic"))]
+    if kod:
+        log(BILGI + "Bilgisayarindaki modeller: %s" % ", ".join(a.split("/")[-1] for a in kod[:8]))
+    log(BILGI + "ONERI: kod isi icin Qwen3-Coder-Next (unsloth UD-Q4_K_XL) + usta olarak Claude. "
+                "Baska model de kullanilabilir: panelde CIRAK MODELI listesinden sec, ayarlar "
+                "modelin kartina gore (ctx, dusunme) kendiliginden uyarlanir.")
+
+
 def kontrol_model() -> bool:
     model = _cfg().env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
     try:
@@ -224,6 +309,7 @@ def kontrol_model() -> bool:
         return False
     if model in adlar:
         log(OK + "Model yuklu: %s" % model)
+        model_raporu()
         return True
     log(UYARI + "Model yok: %s" % model)
     if not DEGISTIR:
@@ -293,11 +379,38 @@ def ide_listesi() -> dict:
     else:
         vscode = os.path.join(_ev(), ".config", "Code", "User", "mcp.json")
         claude_d = os.path.join(_ev(), ".config", "Claude", "claude_desktop_config.json")
+    if sys.platform == "darwin":
+        vscode_ins = os.path.join(_ev(), "Library", "Application Support", "Code - Insiders", "User", "mcp.json")
+        vscodium = os.path.join(_ev(), "Library", "Application Support", "VSCodium", "User", "mcp.json")
+        trae = os.path.join(_ev(), "Library", "Application Support", "Trae", "User", "mcp.json")
+    elif os.name == "nt":
+        vscode_ins = os.path.join(_appdata(), "Code - Insiders", "User", "mcp.json")
+        vscodium = os.path.join(_appdata(), "VSCodium", "User", "mcp.json")
+        trae = os.path.join(_appdata(), "Trae", "User", "mcp.json")
+    else:
+        vscode_ins = os.path.join(_ev(), ".config", "Code - Insiders", "User", "mcp.json")
+        vscodium = os.path.join(_ev(), ".config", "VSCodium", "User", "mcp.json")
+        trae = os.path.join(_ev(), ".config", "Trae", "User", "mcp.json")
+    # Piyasadaki yaygin MCP istemcileri. Yalnizca KURULU olanlara yazilir (klasor kontrolu);
+    # digerlerine hic dokunulmaz. Sema iki tur: VS Code ailesi "servers", geri kalani "mcpServers".
     return {
         "cursor":         (os.path.join(_ev(), ".cursor", "mcp.json"), "mcpServers", os.path.join(_ev(), ".cursor")),
         "vscode":         (vscode, "servers", os.path.dirname(vscode)),
+        "vscode-insiders": (vscode_ins, "servers", os.path.dirname(vscode_ins)),
+        "vscodium":       (vscodium, "servers", os.path.dirname(vscodium)),
         "windsurf":       (os.path.join(_ev(), ".codeium", "windsurf", "mcp_config.json"), "mcpServers",
                            os.path.join(_ev(), ".codeium", "windsurf")),
+        "trae":           (trae, "mcpServers", os.path.dirname(trae)),
+        "zed":            (os.path.join(_ev(), ".config", "zed", "settings.json"), "context_servers",
+                           os.path.join(_ev(), ".config", "zed")),
+        "opencode":       (os.path.join(_ev(), ".config", "opencode", "opencode.json"), "mcp",
+                           os.path.join(_ev(), ".config", "opencode")),
+        "cline":          (os.path.join(_appdata() if os.name == "nt" else os.path.join(_ev(), ".config"),
+                                        "Code", "User", "globalStorage",
+                                        "saoudrizwan.claude-dev", "settings",
+                                        "cline_mcp_settings.json"), "mcpServers",
+                           os.path.join(_appdata() if os.name == "nt" else os.path.join(_ev(), ".config"),
+                                        "Code", "User", "globalStorage", "saoudrizwan.claude-dev")),
         "claude-desktop": (claude_d, "mcpServers", os.path.dirname(claude_d)),
     }
 
@@ -310,8 +423,17 @@ def sunucu_girdisi() -> dict:
 
 def ide_ayarla(ad: str, yol: str, anahtar: str, kurulu_dir: str) -> bool:
     istenen = sunucu_girdisi()
-    if ad == "vscode":
+    if ad in ("vscode", "vscode-insiders", "vscodium"):
         istenen = {"type": "stdio", **istenen}
+    elif ad == "opencode":
+        # opencode.json semasi: {"mcp": {"ad": {"type":"local","command":[exe, arg...]}}}
+        istenen = {"type": "local", "enabled": True,
+                   "command": [istenen["command"]] + istenen["args"],
+                   "environment": istenen.get("env", {})}
+    elif ad == "zed":
+        # zed settings.json: context_servers -> {"command": {...}}
+        istenen = {"source": "custom", "command": istenen["command"],
+                   "args": istenen["args"], "env": istenen.get("env", {})}
     cfg = {}
     if os.path.exists(yol):
         try:
@@ -321,7 +443,7 @@ def ide_ayarla(ad: str, yol: str, anahtar: str, kurulu_dir: str) -> bool:
             log(UYARI + "%s ayar dosyasi okunamadi (%s): %s" % (ad, yol, e))
             return False
     mevcut = (cfg.get(anahtar) or {}).get("apprentice")
-    if mevcut and mevcut.get("args") == istenen["args"] and mevcut.get("command") == istenen["command"]:
+    if mevcut and mevcut.get("args") == istenen.get("args") and mevcut.get("command") == istenen["command"]:
         log(OK + "%s: apprentice kayitli (%s)" % (ad, yol))
         return True
     if not DEGISTIR:
@@ -370,12 +492,80 @@ def kontrol_ideler(secim: str = "") -> bool:
         bulundu += 1
         hepsi_ok = ide_ayarla(ad, yol, anahtar, kurulu_dir) and hepsi_ok
     if not bulundu:
-        log(UYARI + "Kurulu IDE bulunamadi (cursor / vscode / windsurf / claude-desktop). "
-                      "--ide <ad> ile zorla ya da Claude Code kullan.")
+        log(UYARI + "Kurulu IDE bulunamadi (%s). --ide <ad> ile zorla ya da Claude Code kullan."
+            % " / ".join(ideler))
     return hepsi_ok
 
 
 # ------------------------------------------------------------------ 5 oz-test
+CLI_ADAYLARI = [("claude", "Claude Code (usta - panelden bassiz cagrilir)", "--version"),
+                ("codex", "OpenAI Codex CLI", "--version"),
+                ("gemini", "Google Gemini CLI", "--version"),
+                ("copilot", "GitHub Copilot CLI", "--version"),
+                ("cursor-agent", "Cursor Agent CLI", "--version"),
+                ("ollama", "Ollama (cirak calistiricisi)", "--version")]
+
+
+def kontrol_cli() -> bool:
+    """Sistemdeki ajan CLI'larini tara ve raporla. Hicbiri ZORUNLU degil - panel bulduklarini
+    kullanir (usta hedefi 'claude', ozel komut alani digerlerini kabul eder)."""
+    bulunan = []
+    for ad, aciklama, bayrak in CLI_ADAYLARI:
+        yol = shutil.which(ad)
+        if not yol:
+            continue
+        surum = ""
+        try:
+            surum = (kos([yol, bayrak], timeout=20).stdout or "").strip().splitlines()[0][:40]
+        except Exception:
+            pass
+        bulunan.append(ad)
+        log(OK + "%-13s %s %s" % (ad, surum or "(surum okunamadi)", "- " + aciklama))
+    yok = [a for a, _, _ in CLI_ADAYLARI if a not in bulunan]
+    if yok:
+        log(BILGI + "bulunamadi: %s  (istege bagli; panelde 'ozel CLI' alanindan da kullanilabilir)"
+            % ", ".join(yok))
+    if "claude" not in bulunan:
+        log(UYARI + "claude CLI yok - panelin USTA sohbeti calismaz. Kurmak icin: "
+                    "npm i -g @anthropic-ai/claude-code")
+    return True
+
+
+def kisayol_yaz() -> bool:
+    """Masaustune ve Baslat menusune 'Apprentice Panel' kisayolu (konsolsuz).
+    Kullanici komut satiri bilmek zorunda kalmasin: cift tik -> tarayicida panel."""
+    if os.name != "nt":
+        return True
+    py = sistem_python() or sys.executable
+    pyw = os.path.join(os.path.dirname(py), "pythonw.exe")
+    hedef = pyw if os.path.isfile(pyw) else py
+    betik = os.path.join(ROOT, "panel_ac.py")
+    if not os.path.isfile(betik):
+        return True
+    yazildi = []
+    for klasor in (os.path.join(os.path.expanduser("~"), "Desktop"),
+                   os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows",
+                                "Start Menu", "Programs")):
+        if not os.path.isdir(klasor):
+            continue
+        lnk = os.path.join(klasor, "Apprentice Panel.lnk")
+        ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s');"
+              "$s.TargetPath='%s';$s.Arguments='\"%s\"';$s.WorkingDirectory='%s';"
+              "$s.IconLocation='%s';$s.Description='Apprentice canli panel';$s.Save()"
+              % (lnk, hedef, betik, ROOT, hedef))
+        try:
+            r = kos(["powershell", "-NoProfile", "-Command", ps], timeout=30)
+            if r.returncode == 0 and os.path.isfile(lnk):
+                yazildi.append(lnk)
+        except Exception:
+            pass
+    if yazildi:
+        log(OK + "Panel kisayolu: %s" % " ; ".join(yazildi))
+    else:
+        log(UYARI + "Kisayol yazilamadi - paneli elle ac: python panel_ac.py")
+    return True
+
+
 def oz_test() -> bool:
     sys.path.insert(0, os.path.join(ROOT, "tests"))
     try:
@@ -521,9 +711,11 @@ def main() -> int:
         if r.returncode != 0:
             r = kos([py, "-m", "pip", "install", "-q", "ruff"])
         log("  ruff: %s" % ("hazir" if r.returncode == 0 else "kurulamadi (istege bagli, is surer)"))
-    adim(6, "Oz-test");       sonuc.append(oz_test())
+    adim(6, "CLI taramasi");  kontrol_cli()
+    adim(7, "Panel kisayolu"); kisayol_yaz()
+    adim(8, "Oz-test");       sonuc.append(oz_test())
     if a.olc and all(sonuc[:3]):
-        adim(7, "num_batch olcumu (2-3 dk)")
+        adim(9, "num_batch olcumu (2-3 dk)")
         r = kos([sistem_python() or sys.executable, os.path.join(ROOT, "core", "olcum.py"), "--yaz"])
         sonuc.append(r.returncode == 0)
 
