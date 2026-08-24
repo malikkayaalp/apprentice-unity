@@ -14,6 +14,10 @@ baslatmis olursa olsun her is gorunur. v3 (kullanici geri bildirimiyle):
 from __future__ import annotations
 import argparse, json, os, re, subprocess, sys, time
 
+# Konsolsuz kipte (exe/pythonw) alt surecler kendi konsol penceresini ACMASIN:
+# olculdu - nvidia-smi/tasklist her 3 sn'de bir pencere parlatiyordu.
+PENCERESIZ = 0x08000000 if os.name == "nt" else 0
+
 # ------------------------------------------------------------------ veri katmani (GUI'siz test edilir)
 
 
@@ -296,7 +300,8 @@ def sistem_satiri() -> str:
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu",
                               "--format=csv,noheader,nounits"],
-                             capture_output=True, text=True, timeout=4).stdout.strip()
+                             capture_output=True, text=True, timeout=4,
+                             creationflags=PENCERESIZ).stdout.strip()
         k, t, u = [x.strip() for x in out.split(",")[:3]]
         parcalar.append("VRAM %s/%s MiB  GPU %%%s" % (k, t, u))
     except Exception:
@@ -623,8 +628,11 @@ def calisan_izleyici(home: str) -> int | None:
         return None
     try:
         out = subprocess.run(["tasklist", "/FI", "PID eq %d" % pid],
-                             capture_output=True, text=True, timeout=5).stdout
-        return pid if str(pid) in out else None
+                             capture_output=True, text=True, timeout=5,
+                             creationflags=PENCERESIZ).stdout.lower()
+        # pid tek basina yetmez (geri kazanilmis olabilir): surec adi da izleyici olmali
+        return pid if (str(pid) in out and
+                       ("izleyici" in out or "python" in out)) else None
     except Exception:
         return None
 
