@@ -63,7 +63,10 @@ def _kok_sec() -> dict:
         if yol and os.path.isdir(yol):
             AYAR["kok"] = os.path.abspath(yol)
             _ayar_kaydet()
-            return {"kok": AYAR["kok"]}
+            # kural dosyasi yoksa haber ver: proje "bagli" degil demektir (IDE'deki usta
+            # bu projede ciraga devretmeyi bilmez)
+            return {"kok": AYAR["kok"],
+                    "kural_var": os.path.isfile(os.path.join(AYAR["kok"], "AGENTS.md"))}
         return {"kok": AYAR.get("kok", HOME), "iptal": True}
     except Exception as e:  # noqa: BLE001
         return {"hata": str(e)[:200]}
@@ -712,6 +715,18 @@ class Istek(BaseHTTPRequestHandler):
                 self._gonder(_model_bosalt())
             elif yolu == "/api/yukle":
                 self._gonder(_model_yukle())
+            elif yolu == "/api/kural_yaz":
+                # secili calisma alanina denetci kurallarini yaz (AGENTS.md + Cursor .mdc)
+                try:
+                    import importlib
+                    os.environ.setdefault("APPRENTICE_HOME", HOME)
+                    kur = importlib.import_module("kur")
+                    kur.set_root(ROOT); kur.log = lambda *a, **k: None
+                    kur.kural_yaz(AYAR.get("kok", HOME))
+                    self._gonder({"durum": "AGENTS.md + Cursor kurali yazildi",
+                                  "kok": AYAR.get("kok", HOME)})
+                except Exception as e:  # noqa: BLE001
+                    self._gonder({"hata": str(e)[:200]})
             elif yolu == "/api/kok_sec":
                 self._gonder(_kok_sec())
             elif yolu == "/api/kok":

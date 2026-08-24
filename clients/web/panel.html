@@ -938,6 +938,16 @@ $("#kokPill").onclick=async()=>{
       headers:{"Content-Type":"application/json"},body:"{}"})).json();
     if(r.hata)tost("HATA: "+r.hata);
     else if(r.iptal)tost("seçim iptal");
+    else if(r.kural_var===false){
+      tost("📁 " + r.kok + " — bu projede denetçi kuralı (AGENTS.md) yok");
+      if(confirm("Bu projeye Apprentice denetçi kuralı yazılsın mı?\n\n"+
+                 "AGENTS.md + Cursor kuralı eklenir; IDE'deki usta bu projede kod işini "+
+                 "çırağa devretmeyi bilir. (Panel işleri zaten bu klasöre yazılacak.)")){
+        const k=await(await fetch("/api/kural_yaz",{method:"POST",
+          headers:{"Content-Type":"application/json"},body:"{}"})).json();
+        tost(k.hata?("HATA: "+k.hata):"✓ "+k.durum);
+      }
+    }
     else tost("📁 çalışma alanı: "+r.kok);
     kokGoster();
   }catch(e){tost("HATA: "+e);}

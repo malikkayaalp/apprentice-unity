@@ -720,7 +720,24 @@ def kural_yaz(proje: str) -> bool:
             with open(yol, "w", encoding="utf-8", newline="\n") as f:
                 f.write("Bu projede AGENTS.md'deki Apprentice denetci kuralini uygula.\n")
             log(OK + "Copilot yonlendirmesi yazildi: %s" % yol)
-    # eski ad birakildiysa temizlik kullaniciya birakilir; yeni yazim APPRENTICE.md uretmez
+    # PANEL CALISMA ALANINI DA BU PROJEYE AL: "bir projeye bagla" demek, hem IDE'deki ustanin
+    # kurali okumasi hem de panelden verilen isin O PROJEDE yazilmasi demek olmali (kullanici
+    # geri bildirimi: bagladigim proje panelde de secili olmali).
+    try:
+        ev = os.environ.get("APPRENTICE_HOME") or os.path.join(os.path.expanduser("~"), ".apprentice")
+        os.makedirs(ev, exist_ok=True)
+        ap = os.path.join(ev, "panel_ayar.json")
+        try:
+            with open(ap, encoding="utf-8") as f:
+                ayar = json.load(f)
+        except Exception:
+            ayar = {}
+        ayar["kok"] = os.path.abspath(proje)
+        with open(ap, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(ayar, f, ensure_ascii=False, indent=1)
+        log(OK + "Panel calisma alani da bu projeye ayarlandi: %s" % ayar["kok"])
+    except OSError as e:
+        log(UYARI + "panel calisma alani yazilamadi: %s" % str(e)[:100])
     return True
 
 
