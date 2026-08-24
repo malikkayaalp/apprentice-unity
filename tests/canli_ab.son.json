@@ -1,0 +1,21 @@
+{
+ "zaman": "2026-08-24 03:18:39",
+ "A_native": {
+  "canli": false,
+  "sure_s": 34.7,
+  "prompt_tok": 4058,
+  "uretim_tok": 583,
+  "gizli": "6/6",
+  "derleme_durumu": "derlendi",
+  "cikti": "OK   toplam\nOK   bos liste 0\nOK   indirim\nOK   int doner\nOK   yuzde 101 ValueError\nOK   negatif yuzde ValueError\nPUAN 6/6\n"
+ },
+ "B_canli": {
+  "canli": true,
+  "sure_s": 43.1,
+  "prompt_tok": 2788,
+  "uretim_tok": 635,
+  "gizli": "6/6",
+  "derleme_durumu": "derlendi",
+  "cikti": "OK   toplam\nOK   bos liste 0\nOK   indirim\nOK   int doner\nOK   yuzde 101 ValueError\nOK   negatif yuzde ValueError\nPUAN 6/6\n"
+ }
+}

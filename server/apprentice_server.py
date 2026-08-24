@@ -96,8 +96,9 @@ class Job:
     def __init__(self, ortam: str, gorev: str, kriterler: list, oturum: str,
                  play: bool, onarim: int, model: str, url: str, workdir: str = "",
                  kapali: list | None = None, dogrulama: str = "tam", yazilabilir: list | None = None,
-                 harita: bool = False):
+                 harita: bool = False, canli: bool = False):
         self.workdir = workdir
+        self.canli = canli
         self.dogrulama = dogrulama
         self.harita = harita
         self.yazilabilir = [str(x).strip() for x in (yazilabilir or []) if str(x).strip()]
@@ -149,6 +150,8 @@ class Job:
             env["APPRENTICE_YAZILABILIR"] = ",".join(self.yazilabilir)
         if self.harita:
             env["APPRENTICE_HARITA"] = "1"
+        if self.canli:
+            env["APPRENTICE_CANLI"] = "1"
         self.stderr_f = open(os.path.join(self.dir, "stderr.txt"), "w", encoding="utf-8")
         # stdin/stdout=DEVNULL SART: ikisi de MCP kanali. Olculdu: stdin miras alininca
         # cocuk Windows'ta ilk satirini bile yazmadan takildi (yalniz sunucu icinde).
@@ -457,7 +460,8 @@ def tool_worker_run(a: dict) -> dict:
               config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model"),
               _kopru_url(ortam), workdir,
               list(a.get("araclar_kapali") or []) + kapali_ek, dogrulama,
-              a.get("yazilabilir") or [], bool(a.get("harita", False)))
+              a.get("yazilabilir") or [], bool(a.get("harita", False)),
+              bool(a.get("canli", False)))
     JOBS[job.id] = job
     rid = getattr(_CUR_REQ, "id", None)
     if rid is not None:
@@ -534,6 +538,10 @@ TOOLS = [
                         "description": "true: calisma dizininin sembol haritasi (dosya -> fonksiyon/sinif) "
                                        "iscinin sistem istemine eklenir. Hedef dosyanin YERINI bilmedigin "
                                        "iste ise yarar; kucuk/adresli iste harita baglami bosuna sisirir."},
+             "canli": {"type": "boolean", "default": False,
+                       "description": "true: isci arac cagrilarini XML-icerik protokoluyle yapar, "
+                                      "uretim token token canli.txt'ye akar (izle.py daktilo gosterir). "
+                                      "Native tool yolu yerine gecer; kalite A/B'si tests/canli_ab.py."},
              "yazilabilir": {"type": "array", "items": {"type": "string"},
                              "description": "Yazma izni verilen dosyalarin TAM listesi (calisma dizinine goreli). "
                                             "Verilirse baska dosyaya yazma REDDEDILIR. Olculdu: 'yalnizca X yaz' "

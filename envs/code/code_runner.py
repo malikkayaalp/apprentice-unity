@@ -402,8 +402,82 @@ def test_errors(jail: Jail) -> list:
     return [] if rap["ok"] else [test_metni(rap, None)]
 
 
+def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
+              max_steps: int = 12):
+    """CANLI KIP (2026-08-24): arac cagrilari XML-icerik protokoluyle - Ollama duz metni
+    token token akitir (olculdu: native tool argumanlari TEK parca gelir, akmaz). Akan metin
+    canli.txt'ye anlik yazilir; izleyici daktilo gibi gosterir. parse_xml_tool_calls zaten
+    Qwen3-Coder'in kendi soz dizimini cozer - protokol modele yabanci degil.
+    run_agent'in dar bir es-degeri: ayni alanlari doldurur, olcum yolu (chat) degismez."""
+    from core.client import chat_stream, parse_xml_tool_calls, LoopResult
+
+    talimat = ("\n\nARAC CAGIRMA BICIMI (bu iste araclari SU bicimle, duz metin olarak cagir):\n"
+               "<function=arac_adi>\n<parameter=param_adi>\ndeger\n</parameter>\n</function>\n"
+               "Araclar: " + "; ".join(
+                   "%s(%s)" % (t["function"]["name"],
+                               ",".join((t["function"].get("parameters") or {})
+                                        .get("properties", {}).keys()))
+                   for t in tools) +
+               "\nHer cevapta ya arac cagir ya da bitti isen kisa Turkce ozet yaz.")
+    if msgs and msgs[0]["role"] == "system" and "ARAC CAGIRMA BICIMI" not in msgs[0]["content"]:
+        msgs[0] = {"role": "system", "content": msgs[0]["content"] + talimat}
+
+    son_yazim = [0.0]
+
+    def akit(_parca, toplam):
+        if time.time() - son_yazim[0] > 0.15:
+            son_yazim[0] = time.time()
+            try:
+                with open(canli_yol, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(toplam[-6000:])
+            except OSError:
+                pass
+
+    res = LoopResult(messages=msgs)
+    for _adim in range(max_steps):
+        turn = chat_stream(res.messages, tools=None, model=model, think=False,
+                           num_ctx=NUM_CTX, temperature=0.0, num_predict=6000,
+                           extra_options={"num_batch": NUM_BATCH}, on_token=akit)
+        res.turns.append(turn)
+        res.metrics.merge(turn.metrics)
+        if turn.error:
+            res.stopped, res.error = "error", turn.error
+            break
+        # chat_stream XML cagrilari ZATEN ayristirir ve icerikten temizler:
+        # turn.tool_calls dolu, turn.content kalan duz metindir. (Ilk surum icerigi
+        # ikinci kez ayristirmaya kalkip "cagri yok" saniyordu - olculdu, duzeltildi.)
+        from core.client import tc_name, tc_args
+        calls = turn.tool_calls or []
+        icerik = (turn.content or "").strip()
+        if not calls:
+            res.final_text = icerik
+            res.stopped = "done"
+            res.messages.append({"role": "assistant", "content": icerik})
+            break
+        # konusma gecmisine cagrilar XML olarak geri yazilir - model ne yaptigini gorur
+        xml = "".join("\n<function=%s>%s\n</function>" % (
+            tc_name(c), "".join("\n<parameter=%s>\n%s\n</parameter>" % (k, v)
+                                for k, v in tc_args(c).items()))
+            for c in calls)
+        res.messages.append({"role": "assistant", "content": (icerik + xml).strip()})
+        sonuclar = []
+        for c in calls:
+            out = dispatch(tc_name(c), tc_args(c))
+            sonuclar.append({"arac": tc_name(c), "sonuc": out})
+        res.messages.append({"role": "user", "content":
+                             "ARAC SONUCLARI:\n" + json.dumps(sonuclar, ensure_ascii=False)[:8000]})
+    else:
+        res.stopped = "max_steps"
+    try:                                                       # tur bitti: canli ekran temiz
+        open(canli_yol, "w", encoding="utf-8").write("")
+    except OSError:
+        pass
+    return res
+
+
 def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
-                model: str, max_repairs: int, tools: list | None = None, em=None) -> dict:
+                model: str, max_repairs: int, tools: list | None = None, em=None,
+                canli_yol: str = "") -> dict:
     tools = tools if tools is not None else TOOLS
     msgs.append({"role": "user", "content": request})
     t0 = time.time()
@@ -415,9 +489,12 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
     onceki_imzalar: frozenset | None = None
     duragan = False
     while True:
-        res = run_agent(msgs, tools, dispatch, max_steps=12, model=model, think=False,
-                        num_ctx=NUM_CTX, temperature=0.0, num_predict=6000, retries=2,
-                        extra_options={"num_batch": NUM_BATCH})
+        if canli_yol and os.environ.get("APPRENTICE_CANLI") == "1":
+            res = canli_run(msgs, tools, dispatch, model, canli_yol)
+        else:
+            res = run_agent(msgs, tools, dispatch, max_steps=12, model=model, think=False,
+                            num_ctx=NUM_CTX, temperature=0.0, num_predict=6000, retries=2,
+                            extra_options={"num_batch": NUM_BATCH})
         kullanim.merge(res.metrics); adim_sayisi += len(res.turns)
         msgs[:] = res.messages
         errs = compile_errors(jail, written)
@@ -589,7 +666,10 @@ def main() -> int:
             em.emit("baglam", sistem=len(sistem), hafiza=len(hafiza), durum=len(durum),
                     harita=harita_n, araclar=[t["function"]["name"] for t in tools])
             msgs = [{"role": "system", "content": sistem}]
-        r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools, em=em)
+        canli_yol = os.path.join(os.path.dirname(os.path.abspath(a.jsonl)), "canli.txt") \
+            if a.jsonl else ""
+        r = one_request(jail, dispatch, written, msgs, request, a.model, a.repairs, tools,
+                        em=em, canli_yol=canli_yol)
         save_session(a.session_dir, a.session, msgs, a.model)
         if r["text"]:
             em.emit("assistant", text=r["text"])

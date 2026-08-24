@@ -104,6 +104,17 @@ def main() -> int:
     assert k and k["sayac"] == "izin_red"
     print("olay satirlari + kanit ayristirici: ok")
 
+    # kod akisa girer: write olayi basli blok + kod satirlari uretir
+    satirlar = izle.olay_satirlari({"type": "write", "path": "olcu.py",
+                                    "after": "def f():\n    return 1\n"})
+    etiketler = [e for e, _ in satirlar]
+    assert etiketler.count("kod") == 2 and any("olcu.py" in m for _, m in satirlar), satirlar
+    assert satirlar[-1][0] == "bilgi"                       # kapanis ayraci
+    uzun = izle.olay_satirlari({"type": "write", "path": "b.py",
+                                "after": "\n".join("x=%d" % i for i in range(150))})
+    assert any("+50 satir" in m for _, m in uzun), [m for _, m in uzun][-3:]
+    print("kod akis bloklari: ok")
+
     # GUI duman testi: surec 4 sn ayakta kalmali (aninda cokme = kurulum hatasi)
     p = subprocess.Popen([sys.executable, "-B", os.path.join(ROOT, "izle.py"), "--home", HOME],
                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
