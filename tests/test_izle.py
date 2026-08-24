@@ -68,6 +68,7 @@ def main() -> int:
     assert s1["ozet"] == "stok_tasi eklendi"
     s2 = depo.durumlar["20260824-110000-bbbbbb"]
     assert s2["derleme"] == "hata" and any("DURAGANLIK" in str(u) for u in s2["uyarilar"]), s2
+    assert s1["son_olay_t"] > 0 and s1["son_olay"], s1["son_olay"]   # nabiz icin zaman+etiket
     print("veri katmani: ok")
 
     # artimli okuma: ayni dosyada yeni satir -> yalnizca o islenir

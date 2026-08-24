@@ -37,8 +37,11 @@ class IsDeposu:
         p = os.path.join(self.jobs_dir, jid, "events.jsonl")
         try:
             boyut = os.path.getsize(p)
+            mtime = os.path.getmtime(p)
         except OSError:
             return False
+        if jid in self.durumlar:
+            self.durumlar[jid]["son_olay_t"] = mtime
         eski = self._ofset.get(jid, 0)
         if boyut <= eski and jid in self.durumlar:
             self._sure_guncelle(jid)
@@ -60,8 +63,11 @@ class IsDeposu:
         if jid not in self.durumlar:
             self.durumlar[jid] = self._is_bilgisi(jid)
             self.olaylar[jid] = []
+        self.durumlar[jid]["son_olay_t"] = mtime
         self.olaylar[jid].extend(yeni)
         self._ozeti_isle(jid, yeni)
+        if yeni:
+            self.durumlar[jid]["son_olay"] = olay_satiri(yeni[-1])[1][:60]
         self._sure_guncelle(jid)
         return bool(yeni)
 
@@ -75,7 +81,7 @@ class IsDeposu:
                 "dogrulama": job.get("dogrulama", "tam"), "baslangic": job.get("baslangic"),
                 "durum": "calisiyor", "derleme": "-", "tur": 0, "sure": None, "kullanim": {},
                 "dosyalar": [], "uyarilar": [], "hatalar": [], "ozet": "", "son_yazim": None,
-                "asama": "baslama", "baglam": {},
+                "asama": "baslama", "baglam": {}, "son_olay_t": 0.0, "son_olay": "",
                 "sayac": {"arac": 0, "yazim": 0, "noop": 0, "izin_red": 0,
                           "kanit_hata": 0, "onarim": 0}}
 
@@ -282,6 +288,9 @@ def gui(home: str):
                      font=(FONT, 8, "bold"), padx=8, pady=3)
         k.pack(side="left", padx=(0, 4))
         asama_kutulari[ad] = k
+    canli_lbl = tk.Label(orta, text="", bg=T["bg"], fg=T["arac"], font=(FONT, 10, "bold"),
+                         anchor="w")
+    canli_lbl.pack(fill="x", pady=(0, 2))
     tk.Label(orta, text="CANLI OLAY AKISI", bg=T["bg"], fg=T["soluk"],
              font=(FONT, 9, "bold")).pack(anchor="w")
     akis = tk.Text(orta, bg=T["panel"], fg=T["metin"], insertbackground=T["metin"],
@@ -358,6 +367,21 @@ def gui(home: str):
             s = depo.durumlar[jid]
             # asama seridi: gecilen asamalar soluk-vurgulu, aktif olan turuncu
             aktif = s.get("asama", "baslama")
+            # CANLI URETIM nabzi: is kosuyor + son olaydan beri >2 s sessizlik = model uretiyor
+            # (Olculdu: Ollama arac-cagrisi argumanlarini AKITMIYOR - 44 s uretim tek parca
+            # geldi. Token daktilosu bu kanalda imkansiz; nabiz + anez-aninda-gosterim en durustu.)
+            if s["durum"] == "calisiyor" and s.get("son_olay_t"):
+                sessiz = time.time() - s["son_olay_t"]
+                if sessiz > 2:
+                    yanip = "..." if int(time.time() * 2) % 2 else "   "
+                    canli_lbl.configure(
+                        text="MODEL URETIYOR%s  %d sn  (son: %s)" % (yanip, sessiz,
+                                                                     s.get("son_olay") or "-"),
+                        fg=T["arac"])
+                else:
+                    canli_lbl.configure(text="olay isleniyor...", fg=T["yazim"])
+            else:
+                canli_lbl.configure(text="", fg=T["soluk"])
             for ad, _ in ASAMALAR:
                 k = asama_kutulari[ad]
                 if ad == aktif:
