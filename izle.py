@@ -83,6 +83,7 @@ class IsDeposu:
         except Exception:
             job = {}
         return {"id": jid, "ortam": job.get("ortam", "?"), "gorev": job.get("gorev", ""),
+                "kaynak": job.get("kaynak", ""),
                 "dogrulama": job.get("dogrulama", "tam"), "baslangic": job.get("baslangic"),
                 "durum": "calisiyor", "derleme": "-", "tur": 0, "sure": None, "kullanim": {},
                 "dosyalar": [], "uyarilar": [], "hatalar": [], "ozet": "", "son_yazim": None,

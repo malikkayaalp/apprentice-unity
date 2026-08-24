@@ -155,7 +155,13 @@ başlatır). Elle açmak için: `dist/Apprentice-Izleyici.exe` (konsolsuz; `pyth
 üstte model + VRAM/GPU satırı. Sunucuya bağlanmaz, iş klasörünü okur — hangi istemci başlatmış
 olursa olsun her iş görünür.
 
-**Web:** `python clients/web/monitor.py [--port 8765] [--home ~/.apprentice]` — aynı veriyi
+**Web panel (zengin):** `python clients/web/panel.py [--port 8788] [--ac]` — tarayıcıda canlı panel:
+animasyonlu boru hattı (tıklanabilir aşama filtresi), olay kartları (+saniye damgalı, ham veri
+açılır), sözdizimi renklendirmeli kod blokları, canlı daktilo, metrik sayaçları, VRAM/GPU
+göstergeleri ve **görev konsolu** — tarayıcıdan `worker_run` başlatır; iş `kaynak: "web-panel"`
+imzalıdır ve usta `worker_status(is_id)` ile diskten görür (disk yedeği eklendi).
+
+**Web (basit):** `python clients/web/monitor.py [--port 8765] [--home ~/.apprentice]` — aynı veriyi
 tarayıcıda listeler; `/api/jobs` JSON verir.
 
 ## Ölçüm kampanyası

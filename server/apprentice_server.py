@@ -434,6 +434,61 @@ def _precheck(ortam: str) -> str:
     return ""
 
 
+def rapor_diskten(jid: str) -> dict | None:
+    """Diskteki is klasorunden rapor derler (baska surecin isi). Sozlesmenin cekirdegi."""
+    d = os.path.join(HOME, "jobs", jid)
+    if not os.path.isdir(d):
+        return None
+    try:
+        with open(os.path.join(d, "job.json"), encoding="utf-8") as f:
+            job = json.load(f)
+    except Exception:
+        job = {"id": jid}
+    rep = {"is_id": jid, "ortam": job.get("ortam"), "gorev": job.get("gorev", ""),
+           "kaynak": job.get("kaynak", ""), "oturum": job.get("oturum", ""),
+           "yazilan_dosyalar": [], "derleme_durumu": "calisiyor", "hatalar": [],
+           "tur_sayisi": 0, "ozet": "", "araclar": [], "is_klasoru": d,
+           "sure": round(time.time() - job.get("baslangic", time.time()), 1),
+           "durum": "calisiyor", "diskten": True}
+    icerik: dict = {}
+    try:
+        with open(os.path.join(d, "events.jsonl"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    continue
+                t = e.get("type")
+                if t == "tool":
+                    rep["araclar"].append("%s %s" % (e.get("name"), e.get("detail") or ""))
+                elif t == "write":
+                    icerik[e.get("path")] = e.get("after") or ""
+                elif t == "assistant":
+                    rep["ozet"] = e.get("text", "")
+                elif t == "result":
+                    rep["derleme_durumu"] = "derlendi" if e.get("ok") else "derleme_hatasi"
+                    rep["hatalar"] = e.get("errors") or []
+                    rep["tur_sayisi"] = int(e.get("rounds", 0)) + 1
+                    if e.get("kullanim"):
+                        rep["kullanim"] = e["kullanim"]
+                    for alan in ("duragan", "butce_uyarisi", "hafiza_uyarisi", "durum_uyarisi"):
+                        if e.get(alan):
+                            rep[alan if alan != "duragan" else "duragan"] = e[alan]
+                    if e.get("ruff"):
+                        rep["ruff_uyarilari"] = e["ruff"]
+                elif t == "error":
+                    rep["hatalar"].append(e.get("message", ""))
+                    rep["derleme_durumu"] = "calistirilamadi"
+                elif t == "exit":
+                    rep["durum"] = "bitti"
+    except OSError:
+        pass
+    rep["yazilan_dosyalar"] = [{"yol": y, "icerik": ic[:ICERIK_SINIRI],
+                                "satir": ic.count(chr(10)) + 1}
+                               for y, ic in icerik.items()]
+    return rep
+
+
 def _kopru_url(ortam: str) -> str:
     k = ENVS.get(ortam, {}).get("kopru") or {}
     return config.env_or(k.get("ortam_degiskeni", ""), k.get("ayar", ""), k.get("varsayilan", "")) or ""
@@ -614,6 +669,11 @@ def tool_worker_status(a: dict) -> dict:
     jid = str(a.get("is_id") or "")
     job = JOBS.get(jid)
     if job is None:
+        # DISK YEDEGI (2026-08-24): baska surecten (web paneli, olcum betigi) baslatilan
+        # isler bu surecin JOBS sozlugunde yoktur ama diskte durur - usta yine gorebilsin.
+        r = rapor_diskten(jid)
+        if r is not None:
+            return r
         return {"hata": "bilinmeyen is_id %r (bu surecte: %s)" % (jid, list(JOBS)[-5:])}
     if a.get("durdur"):
         job.kill()
