@@ -118,7 +118,32 @@ class Job:
     def events_path(self):
         return os.path.join(self.dir, "events.jsonl")
 
+    def izleyici_ac(self):
+        """Is baslarken izleyiciyi otomatik ac (acik degilse; APPRENTICE_IZLEYICI=0 kapatir).
+        Konsol penceresi ACILMAZ: exe varsa o, yoksa pythonw + CREATE_NO_WINDOW."""
+        if os.environ.get("APPRENTICE_IZLEYICI", "1") == "0":
+            return
+        try:
+            sys.path.insert(0, ROOT)
+            from izle import calisan_izleyici
+            if calisan_izleyici(HOME):
+                return
+            exe = os.path.join(ROOT, "dist", "Apprentice-Izleyici.exe")
+            if os.path.isfile(exe):
+                cmd = [exe, "--home", HOME]
+            else:
+                pyw = os.path.join(os.path.dirname(PYTHON), "pythonw.exe")
+                cmd = [pyw if os.path.isfile(pyw) else PYTHON,
+                       os.path.join(ROOT, "izle.py"), "--home", HOME]
+            bayrak = 0x08000000 if os.name == "nt" else 0          # CREATE_NO_WINDOW
+            subprocess.Popen(cmd, cwd=ROOT, creationflags=bayrak,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except Exception:
+            pass                                                   # izleyici konfor: is engellenmez
+
     def start(self):
+        self.izleyici_ac()
         runner = ENVS[self.ortam]["runner"]
         prompt = PROMPT_TMPL.format(
             gorev=self.gorev.strip(),

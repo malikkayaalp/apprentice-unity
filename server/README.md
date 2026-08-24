@@ -145,7 +145,11 @@ olay şemasını (system/tool/tool_result/write/assistant/result/exit) uygular.
 
 ## İzleme
 
-**Masaüstü (önerilen):** `python izle.py [--home ~/.apprentice]` — koyu temalı canlı izleyici
+**Masaüstü (önerilen):** izleyici artık **kendiliğinden açılır** — sunucu bir iş başlattığında
+açık değilse konsolsuz olarak açılır (`APPRENTICE_IZLEYICI=0` kapatır; ölçüm betikleri kapalı
+başlatır). Elle açmak için: `dist/Apprentice-Izleyici.exe` (konsolsuz; `python izle_build.py`
+üretir) ya da `pythonw izle.py`. Aynı ev için tek pencere açılır (PID kilidi; `--coklu` aşar).
+`python izle.py [--home ~/.apprentice]` — koyu temalı canlı izleyici
 (tkinter, bağımlılıksız): iş listesi, renk kodlu canlı olay akışı (araç/yazım/hata/sonuç), iş özeti
 (durum, tur, token, DURAĞANLIK/ruff/bütçe/hafıza uyarıları), son yazılan dosyanın önizlemesi,
 üstte model + VRAM/GPU satırı. Sunucuya bağlanmaz, iş klasörünü okur — hangi istemci başlatmış

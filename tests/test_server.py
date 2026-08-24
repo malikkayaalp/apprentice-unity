@@ -21,6 +21,8 @@ SOZLESME = {"yazilan_dosyalar": list, "derleme_durumu": str, "hatalar": list,
 
 class Client:
     def __init__(self, env=None):
+        env = dict(env or {})
+        env.setdefault("APPRENTICE_IZLEYICI", "0")   # olcumler pencere acmasin
         e = dict(os.environ)
         e.update(env or {})
         self.p = subprocess.Popen([sys.executable, SERVER], stdin=subprocess.PIPE,
