@@ -157,6 +157,72 @@ def _gorev_baslat(veri: dict) -> dict:
     return {"is_id": job.id, "baslik": baslik}
 
 
+def _usta_istek(veri: dict) -> dict:
+    """Panelden Claude CLI'ya BASSIZ istek (claude -p). Desktop gerekmez; kullanicinin
+    girisiyle calisir. Her istek Max kotasindan harcar - o yuzden yalnizca kullanici
+    tetikler, otomatik cagri YOK. Arac izni istenirse usta worker_run kullanabilir
+    (tam dongu: panel -> Claude -> cirak -> Claude -> panel)."""
+    import shutil as _sh, subprocess as _sp
+    prompt = str(veri.get("prompt") or "").strip()
+    if not prompt:
+        return {"hata": "prompt bos"}
+    if not _sh.which("claude"):
+        return {"hata": "claude CLI bulunamadi (npm i -g @anthropic-ai/claude-code)"}
+    uid = time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(3).hex()
+    kdir = os.path.join(HOME, "usta_istekler")
+    os.makedirs(kdir, exist_ok=True)
+    kayit = {"id": uid, "prompt": prompt, "durum": "calisiyor",
+             "araclar": bool(veri.get("araclar")), "baslangic": time.time(), "cevap": ""}
+    yol = os.path.join(kdir, uid + ".json")
+    with open(yol, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(kayit, f, ensure_ascii=False)
+
+    def kos():
+        cmd = ["claude", "-p", prompt, "--output-format", "text"]
+        if kayit["araclar"]:
+            cmd += ["--allowedTools", "mcp__apprentice__worker_run,mcp__apprentice__worker_status"]
+        env = dict(os.environ, APPRENTICE_HOME=HOME, APPRENTICE_IZLEYICI="0",
+                   PYTHONIOENCODING="utf-8")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                        errors="replace", timeout=600, cwd=ROOT, env=env, shell=True)
+            kayit["cevap"] = (r.stdout or "").strip() or ("HATA: " + (r.stderr or "")[-500:])
+            kayit["durum"] = "bitti" if r.returncode == 0 else "hata"
+        except Exception as e:  # noqa: BLE001
+            kayit["cevap"] = "HATA: %s" % str(e)[:300]
+            kayit["durum"] = "hata"
+        kayit["sure"] = round(time.time() - kayit["baslangic"], 1)
+        with open(yol, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(kayit, f, ensure_ascii=False)
+    threading.Thread(target=kos, daemon=True).start()
+    return {"id": uid}
+
+
+def _usta_liste() -> list:
+    kdir = os.path.join(HOME, "usta_istekler")
+    out = []
+    if os.path.isdir(kdir):
+        for ad in sorted(os.listdir(kdir), reverse=True)[:20]:
+            try:
+                with open(os.path.join(kdir, ad), encoding="utf-8") as f:
+                    k = json.load(f)
+                out.append({"id": k["id"], "durum": k.get("durum"),
+                            "ozet": k.get("prompt", "")[:60],
+                            "sure": k.get("sure"), "araclar": k.get("araclar")})
+            except Exception:
+                pass
+    return out
+
+
+def _usta_cevap(uid: str) -> dict:
+    yol = os.path.join(HOME, "usta_istekler", uid + ".json")
+    try:
+        with open(yol, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"hata": "istek yok"}
+
+
 class Istek(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -184,6 +250,10 @@ class Istek(BaseHTTPRequestHandler):
                 self._gonder({"isler": _is_listesi(), "sistem": _sistem()})
             elif yol.path == "/api/olaylar":
                 self._gonder(_olaylar(q.get("is", ""), int(q.get("n", 0))))
+            elif yol.path == "/api/usta_liste":
+                self._gonder({"istekler": _usta_liste()})
+            elif yol.path == "/api/usta_cevap":
+                self._gonder(_usta_cevap(q.get("id", "")))
             else:
                 self._gonder({"hata": "yok"}, kod=404)
         except Exception as e:  # noqa: BLE001
@@ -193,8 +263,11 @@ class Istek(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             veri = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
-            if urllib.parse.urlparse(self.path).path == "/api/gorev":
+            yolu = urllib.parse.urlparse(self.path).path
+            if yolu == "/api/gorev":
                 self._gonder(_gorev_baslat(veri))
+            elif yolu == "/api/usta":
+                self._gonder(_usta_istek(veri))
             else:
                 self._gonder({"hata": "yok"}, kod=404)
         except Exception as e:  # noqa: BLE001

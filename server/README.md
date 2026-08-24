@@ -159,7 +159,11 @@ olursa olsun her iş görünür.
 animasyonlu boru hattı (tıklanabilir aşama filtresi), olay kartları (+saniye damgalı, ham veri
 açılır), sözdizimi renklendirmeli kod blokları, canlı daktilo, metrik sayaçları, VRAM/GPU
 göstergeleri ve **görev konsolu** — tarayıcıdan `worker_run` başlatır; iş `kaynak: "web-panel"`
-imzalıdır ve usta `worker_status(is_id)` ile diskten görür (disk yedeği eklendi).
+imzalıdır ve usta `worker_status(is_id)` ile diskten görür (disk yedeği eklendi). Görev formunda
+**hedef seçimi** var: Çırak (yerel, bedava) ya da **Usta (Claude CLI, başsız `claude -p`** — Desktop
+gerekmez; her istek Max kotasından harcar, yalnız kullanıcı tetikler). "Araç izni" kutusuyla Claude
+`worker_run/worker_status` kullanabilir — panelden yazılan tek komutla tam usta-çırak döngüsü döner;
+cevaplar USTA panelinde listelenir (`~/.apprentice/usta_istekler/`).
 
 **Web (basit):** `python clients/web/monitor.py [--port 8765] [--home ~/.apprentice]` — aynı veriyi
 tarayıcıda listeler; `/api/jobs` JSON verir.

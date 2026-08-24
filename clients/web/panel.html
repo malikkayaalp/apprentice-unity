@@ -249,6 +249,17 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
   <div class="kart" data-p="gorev"><div class="kbaslik" style="color:var(--vurgu2)">⚡ GÖREV GÖNDER
       <span class="kek">usta sonraki aracında bildirilir</span></div>
     <div class="kgovde"><div class="gform">
+      <label>KİME</label>
+      <select id="kHedef">
+        <option value="cirak">🔧 Çırak (yerel model — bedava)</option>
+        <option value="usta">🧠 Usta (Claude CLI — Max kotasından harcar)</option>
+      </select>
+      <div id="ustaForm" style="display:none;flex-direction:column;gap:7px">
+        <label>CLAUDE'A PROMPT</label>
+        <textarea id="uPrompt" rows="4" placeholder="ör: son işi worker_status ile incele ve değerlendir... ya da herhangi bir soru"></textarea>
+        <label class="kutucuk"><input type="checkbox" id="uAraclar"> araç izni (Claude worker_run/worker_status kullanabilir — tam döngü)</label>
+      </div>
+      <div id="cirakForm" style="display:flex;flex-direction:column;gap:7px">
       <label>BAŞLIK (listede görünür)</label>
       <input id="kBaslik" placeholder="kalman filtresi">
       <label>GÖREV</label>
@@ -266,9 +277,19 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
           <label class="kutucuk"><input type="checkbox" id="kHarita"> harita</label>
         </div>
       </div>
+      </div>
       <button id="gonder">ÇIRAĞI ÇALIŞTIR</button>
       <div id="kNot"></div>
     </div></div>
+    <div class="tutamak"></div></div>
+
+  <div class="kart" data-p="usta"><div class="kbaslik" style="color:var(--cyan)">🧠 USTA · CLAUDE
+      <span class="kek" id="ustaDurum"></span></div>
+    <div class="kgovde">
+      <div id="ustaListe" style="flex-shrink:0;max-height:32%;overflow-y:auto;padding:6px 8px 0"></div>
+      <div id="ustaCevap" style="flex:1;overflow-y:auto;padding:9px 13px;font:.88em/1.6 var(--mono);
+        white-space:pre-wrap;overflow-wrap:anywhere;color:var(--metin)">—</div>
+    </div>
     <div class="tutamak"></div></div>
 </div>
 <div id="tost"></div>
@@ -292,11 +313,14 @@ const VARSAYILAN={
   isler:{gx:0,gy:0,gw:5,gh:24}, boru:{gx:5,gy:0,gw:12,gh:4},
   akis:{gx:5,gy:4,gw:12,gh:12}, daktilo:{gx:5,gy:16,gw:12,gh:8},
   metrik:{gx:17,gy:0,gw:7,gh:5}, ozet:{gx:17,gy:5,gw:7,gh:6},
-  gorev:{gx:17,gy:11,gw:7,gh:8}, dosyalar:{gx:17,gy:19,gw:7,gh:5}};
+  gorev:{gx:17,gy:11,gw:7,gh:8}, dosyalar:{gx:17,gy:19,gw:7,gh:5},
+  usta:{gx:5,gy:24,gw:12,gh:8}};
 const PANEL_ADLARI={isler:"İŞLER",boru:"BORU HATTI",akis:"OLAY AKIŞI",daktilo:"DAKTİLO",
-  metrik:"METRİKLER",ozet:"İŞ ÖZETİ",gorev:"GÖREV GÖNDER",dosyalar:"DOSYALAR"};
-let gizliPaneller=new Set();
-try{gizliPaneller=new Set(JSON.parse(localStorage.getItem("apprentice_gizli_paneller"))||[])}catch(e){}
+  metrik:"METRİKLER",ozet:"İŞ ÖZETİ",gorev:"GÖREV GÖNDER",dosyalar:"DOSYALAR",
+  usta:"USTA · CLAUDE"};
+let gizliPaneller=new Set(["usta"]);      // usta paneli ilk kullanimda kendiliginden acilir
+try{const g=JSON.parse(localStorage.getItem("apprentice_gizli_paneller"));
+  if(g)gizliPaneller=new Set(g)}catch(e){}
 let gizliIsler=new Set();
 try{gizliIsler=new Set(JSON.parse(localStorage.getItem("apprentice_gizli_isler"))||[])}catch(e){}
 let yerlesim=null;
@@ -621,8 +645,56 @@ async function olaylariCek(){
   setTimeout(olaylariCek,550);
 }
 
-/* --------------- gorev paneli --------------- */
+/* --------------- gorev paneli (hedef: cirak | usta) --------------- */
+let seciliUsta=null;
+$("#kHedef").onchange=e=>{
+  const u=e.target.value==="usta";
+  $("#ustaForm").style.display=u?"flex":"none";
+  $("#cirakForm").style.display=u?"none":"flex";
+  $("#gonder").textContent=u?"CLAUDE'A GÖNDER":"ÇIRAĞI ÇALIŞTIR";
+};
+async function ustaListeCek(){
+  try{
+    const r=await(await fetch("/api/usta_liste")).json();
+    const ist=r.istekler||[];
+    const kosan=ist.filter(x=>x.durum==="calisiyor").length;
+    $("#ustaDurum").textContent=kosan?("● "+kosan+" istek koşuyor"):"";
+    const kap=$("#ustaListe"); kap.innerHTML="";
+    ist.forEach(x=>{
+      const d=document.createElement("div");
+      d.className="is"+(x.id===seciliUsta?" aktif":"");
+      d.innerHTML='<div class="ibaslik">'+kacir(x.ozet)+'</div><div class="imeta">'+
+        '<span class="rozet '+(x.durum==="calisiyor"?"kosuyor":(x.durum==="bitti"?"ok":"hata"))+'">'+
+        x.durum+'</span>'+(x.sure?'<span class="rozet">'+x.sure+'s</span>':"")+
+        (x.araclar?'<span class="rozet web">araçlı</span>':"")+'</div>';
+      d.onclick=()=>{seciliUsta=x.id};
+      kap.appendChild(d);
+    });
+    if(!seciliUsta&&ist.length)seciliUsta=ist[0].id;
+    if(seciliUsta){
+      const c=await(await fetch("/api/usta_cevap?id="+seciliUsta)).json();
+      $("#ustaCevap").textContent=c.cevap||(c.durum==="calisiyor"?"Claude düşünüyor…":"—");
+    }
+  }catch(e){}
+  setTimeout(ustaListeCek,3000);
+}
 $("#gonder").onclick=async()=>{
+  if($("#kHedef").value==="usta"){
+    const b=$("#gonder"); b.disabled=true; $("#kNot").textContent="Claude'a gönderiliyor...";
+    try{
+      const r=await(await fetch("/api/usta",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({prompt:$("#uPrompt").value,araclar:$("#uAraclar").checked})})).json();
+      if(r.hata){$("#kNot").textContent="HATA: "+r.hata;}
+      else{
+        $("#kNot").textContent=""; $("#uPrompt").value=""; seciliUsta=r.id;
+        gizliPaneller.delete("usta"); panelKaydet(); duzenle();   // usta paneli kendiliginden acilir
+        const t=$("#tost"); t.textContent="🧠 Claude'a gitti — cevap USTA panelinde";
+        t.style.display="block"; setTimeout(()=>t.style.display="none",5000);
+      }
+    }catch(e){$("#kNot").textContent="HATA: "+e;}
+    b.disabled=false; return;
+  }
   const b=$("#gonder"); b.disabled=true; $("#kNot").textContent="gönderiliyor...";
   try{
     const veri={baslik:$("#kBaslik").value, gorev:$("#kGorev").value,
@@ -648,7 +720,7 @@ $("#gonder").onclick=async()=>{
 $("#akis").addEventListener("wheel",()=>{const a=$("#akis");
   takip=a.scrollTop+a.clientHeight>=a.scrollHeight-60;});
 
-boruCiz(); uygula(); filtreSec("tumu"); isleriCek(); olaylariCek(); daktiloAdim();
+boruCiz(); uygula(); filtreSec("tumu"); isleriCek(); olaylariCek(); daktiloAdim(); ustaListeCek();
 </script>
 </body>
 </html>
