@@ -116,6 +116,7 @@ class IsDeposu:
                 s["dosyalar"].append(e.get("path"))
                 s["sayac"]["yazim"] += 1
                 s["son_yazim"] = {"path": e.get("path"), "icerik": e.get("after") or ""}
+                s.setdefault("yazimlar", {})[e.get("path")] = e.get("after") or ""
             elif t == "assistant":
                 s["ozet"] = e.get("text", "")
             elif t == "result":
@@ -198,7 +199,7 @@ def olay_satirlari(e: dict) -> list:
         out = [("yazim", ""), (et, metin),
                ("bilgi", "─" * 8 + " %s " % e.get("path") + "─" * 30)]
         for s in icerik[:KOD_SATIR_SINIRI]:
-            out.append(("kod", "  " + s))
+            out.append(("kod", s))                     # girinti AYNEN korunur
         if len(icerik) > KOD_SATIR_SINIRI:
             out.append(("bilgi", "  ... (+%d satir - tamami sag panelde)" %
                         (len(icerik) - KOD_SATIR_SINIRI)))
@@ -238,7 +239,7 @@ def olay_satiri(e: dict) -> tuple:
         n = (e.get("after") or "").count("\n") + 1
         return "yazim", "YAZDI %s (%d satir)" % (e.get("path"), n)
     if t == "assistant":
-        return "sonuc", "ISCI OZETI: %s" % str(e.get("text", ""))[:200].replace("\n", " ")
+        return "sonuc", "ISCI OZETI:\n%s" % str(e.get("text", ""))[:1500]
     if t == "result":
         durum = "derlendi" if e.get("ok") else ("HATA: " + "; ".join(e.get("errors") or [])[:150])
         return ("sonuc" if e.get("ok") else "hata"), "SONUC %s (tur %s, %.0f s)" % (
@@ -338,6 +339,8 @@ def gui(home: str):
         anchor="w", padx=8, pady=(6, 2))
     takip = tk.BooleanVar(value=True)
     ttk.Checkbutton(sol, text="en yeniyi takip et", variable=takip).pack(anchor="w", padx=8)
+    hepsi = tk.BooleanVar(value=False)
+    ttk.Checkbutton(sol, text="eski isleri de goster", variable=hepsi).pack(anchor="w", padx=8)
     liste = tk.Listbox(sol, width=32, height=34, bg=T["panel2"], fg=T["metin"],
                        selectbackground=T["vurgu"], selectforeground="#ffffff",
                        borderwidth=0, highlightthickness=0, font=("Consolas", 9))
@@ -389,8 +392,20 @@ def gui(home: str):
     ozet_lbl = tk.Label(sag, text="-", bg=T["panel"], fg=T["metin"], justify="left",
                         anchor="nw", wraplength=330, font=(FONT, 9))
     ozet_lbl.pack(fill="x", padx=8)
-    tk.Label(sag, text="SON YAZILAN DOSYA", bg=T["panel"], fg=T["soluk"],
-             font=(FONT, 9, "bold")).pack(anchor="w", padx=8, pady=(8, 2))
+    tk.Label(sag, text="YAZILAN DOSYALAR  (tikla -> asagida goster)", bg=T["panel"],
+             fg=T["soluk"], font=(FONT, 9, "bold")).pack(anchor="w", padx=8, pady=(8, 2))
+    dosya_liste = tk.Listbox(sag, height=5, bg=T["panel2"], fg=T["yazim"],
+                             selectbackground=T["vurgu"], selectforeground="#ffffff",
+                             borderwidth=0, highlightthickness=0, font=("Consolas", 9))
+    dosya_liste.pack(fill="x", padx=8)
+    secili_dosya = {"yol": None, "elle": False}
+
+    def dosya_tikla(_e=None):
+        sec = dosya_liste.curselection()
+        if sec:
+            secili_dosya["yol"] = dosya_liste.get(sec[0])
+            secili_dosya["elle"] = True
+    dosya_liste.bind("<<ListboxSelect>>", dosya_tikla)
     onizleme = tk.Text(sag, bg=T["panel2"], fg=T["kod"], borderwidth=0, highlightthickness=0,
                        font=("Consolas", 8), wrap="none", height=20)
     for ad in ("kw", "yorum", "sayi", "kod"):
@@ -414,8 +429,8 @@ def gui(home: str):
             for _ in range(min(hiz, len(bekleyen))):
                 etiket, metin = bekleyen.pop(0)
                 if etiket == "kod":
-                    akis.insert("end", "  ", "kod")
-                    kod_ekle(akis, metin.lstrip())
+                    akis.insert("end", "  ", "kod")    # blok girintisi; satirin kendi girintisi korunur
+                    kod_ekle(akis, metin)
                 else:
                     akis.insert("end", metin + "\n", etiket)
             akis.see("end")
@@ -452,6 +467,7 @@ def gui(home: str):
             durum["secili"] = jid
             durum["gosterilen"] = 0
             durum["canli_metin"] = ""; durum["canli_ciz"] = 0
+            secili_dosya["yol"] = None; secili_dosya["elle"] = False
             bekleyen.clear()
             akis.configure(state="normal"); akis.delete("1.0", "end"); akis.configure(state="disabled")
             daktilo_kutu.configure(state="normal"); daktilo_kutu.delete("1.0", "end")
@@ -468,7 +484,7 @@ def gui(home: str):
         return durum["filtre"] == "tumu" or e.get("_asama") == durum["filtre"]
 
     def guncelle():
-        adlar = depo.is_listesi()[:60]
+        adlar = depo.is_listesi()[:60 if hepsi.get() else 12]
         for jid in adlar[:8]:
             depo.tazele(jid)
         if durum["secili"] and durum["secili"] not in depo.olaylar:
@@ -565,12 +581,20 @@ def gui(home: str):
             for h in s["hatalar"][:2]:
                 satirlar.append("HATA: " + str(h)[:110])
             ozet_lbl.configure(text="\n".join(satirlar))
-            y = s.get("son_yazim")
-            if y:
+            yazimlar = s.get("yazimlar") or {}
+            if list(yazimlar) != list(dosya_liste.get(0, "end")):
+                dosya_liste.delete(0, "end")
+                for yol in yazimlar:
+                    dosya_liste.insert("end", yol)
+            hedef_yol = secili_dosya["yol"] if (secili_dosya["elle"] and
+                                                secili_dosya["yol"] in yazimlar) \
+                else (list(yazimlar)[-1] if yazimlar else None)
+            if hedef_yol and getattr(onizleme, "_gosterilen", None) != (hedef_yol, len(yazimlar.get(hedef_yol, ""))):
+                onizleme._gosterilen = (hedef_yol, len(yazimlar[hedef_yol]))
                 onizleme.configure(state="normal")
                 onizleme.delete("1.0", "end")
-                onizleme.insert("end", "# %s\n" % y["path"], "yorum")
-                for satir in y["icerik"].splitlines()[:120]:
+                onizleme.insert("end", "# %s\n" % hedef_yol, "yorum")
+                for satir in yazimlar[hedef_yol].splitlines()[:150]:
                     kod_ekle(onizleme, satir)
                 onizleme.configure(state="disabled")
         if time.time() - durum["sistem_t"] > 3:
