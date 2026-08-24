@@ -401,7 +401,9 @@ async function olaylariCek(){
       imlecN=r.toplam||imlecN;
       // daktilo
       if(r.canli&&r.canli.trim()){
-        if(!daktiloHedef||!r.canli.startsWith(daktiloHedef.slice(0,150))){daktiloCiz=0;}
+        // yeni tur tespiti: onceki hedefin TAMAMI yeni metnin on-eki degilse bastan
+        // (isci artik tam metin yazar, on-ek tur icinde sabittir - kayan pencere kalkti)
+        if(!r.canli.startsWith(daktiloHedef)){daktiloCiz=0;$("#dmetin").innerHTML="";}
         daktiloHedef=r.canli; $("#daktilo").classList.add("acik");
       }else if(s.durum!=="calisiyor"){$("#daktilo").classList.remove("acik");}
       // boru hatti

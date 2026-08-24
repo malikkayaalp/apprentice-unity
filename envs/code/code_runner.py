@@ -429,7 +429,10 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
             son_yazim[0] = time.time()
             try:
                 with open(canli_yol, "w", encoding="utf-8", newline="\n") as f:
-                    f.write(toplam[-6000:])
+                    # TAM metin, kayan pencere DEGIL: pencere kaydirilinca dosyanin basi her
+                    # yazimda degisiyordu ve izleyiciler "yeni tur" sanip daktiloyu bastan
+                    # oynatiyordu (Kalman olayi: sonsuz tekrar gorunumu). On-ek sabit kalmali.
+                    f.write(toplam[:60000])
             except OSError:
                 pass
 

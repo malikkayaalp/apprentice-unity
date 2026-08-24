@@ -110,6 +110,16 @@ def _gorev_baslat(veri: dict) -> dict:
                   bool(veri.get("harita")), bool(veri.get("canli", True)))
     job.start()
     srv.JOBS[job.id] = job
+    # ZAMAN ASIMI BEKCISI (Kalman olayinda fark edildi): MCP'deki bekleme dongusu isciyi
+    # sinirda oldurur ama panel isleri o donguden gecmez - bekci olmadan sahipsiz kalirlardi.
+    sinir = min(float(veri.get("zaman_asimi_s") or 1800), 3600)
+    def _bekci():
+        try:
+            if not job.done:
+                job.kill()
+        except Exception:
+            pass
+    threading.Timer(sinir, _bekci).start()
     # kaynak isareti: usta ve izleyiciler bu isin panelden geldigini gorsun
     jp = os.path.join(job.dir, "job.json")
     try:

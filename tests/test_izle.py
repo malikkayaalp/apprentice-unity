@@ -115,8 +115,22 @@ def main() -> int:
     assert any("+50 satir" in m for _, m in uzun), [m for _, m in uzun][-3:]
     print("kod akis bloklari: ok")
 
-    # GUI duman testi: surec 4 sn ayakta kalmali (aninda cokme = kurulum hatasi)
-    p = subprocess.Popen([sys.executable, "-B", os.path.join(ROOT, "izle.py"), "--home", HOME],
+    # PID kilidi birim testi: canli pid + izleyici/python adi -> "acik" der; olu pid -> None
+    kilit = os.path.join(HOME, "izleyici.pid")
+    with open(kilit, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))                      # bu surec canli ve adi python
+    assert izle.calisan_izleyici(HOME) == os.getpid()
+    with open(kilit, "w", encoding="utf-8") as f:
+        f.write("999999")
+    assert izle.calisan_izleyici(HOME) is None
+    os.remove(kilit)
+    print("pid kilidi: ok")
+
+    # GUI duman testi: surec 4 sn ayakta kalmali (aninda cokme = kurulum hatasi).
+    # --coklu: kilitten bagimsiz - terminate atexit calistirmadigi icin onceki kosudan
+    # bayat kilit kalabiliyor, duman testinin konusu kilit degil pencere.
+    p = subprocess.Popen([sys.executable, "-B", os.path.join(ROOT, "izle.py"), "--home", HOME,
+                          "--coklu"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     time.sleep(4)
     if p.poll() is not None:

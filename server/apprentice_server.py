@@ -155,7 +155,11 @@ class Job:
             json.dump({"id": self.id, "ortam": self.ortam, "gorev": self.gorev,
                        "kabul_kriterleri": self.kriterler, "oturum": self.oturum,
                        "play": self.play, "model": self.model, "baslangic": self.t0,
-                       "calisma_dizini": self.workdir},
+                       "calisma_dizini": self.workdir,
+                       # izleyiciler dogru gostersin (olculdu: alan yazilmayinca panel
+                       # her ise "tam" diyordu - kullanici kipinden suphe etti)
+                       "dogrulama": self.dogrulama, "canli": self.canli,
+                       "harita": self.harita, "yazilabilir": self.yazilabilir},
                       f, ensure_ascii=False, indent=1)
         sess_dir = os.path.join(HOME, "sessions", self.ortam)
         cmd = [PYTHON, runner, "--jsonl", self.events_path, "--prompt-file", pf,

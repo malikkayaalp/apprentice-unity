@@ -537,7 +537,7 @@ def gui(home: str):
                         canli_txt = f.read()
                 except OSError:
                     pass
-            if canli_txt and not canli_txt.startswith(durum["canli_metin"][:200]):
+            if canli_txt and not canli_txt.startswith(durum["canli_metin"]):
                 durum["canli_metin"] = canli_txt          # yeni tur: bastan
                 durum["canli_ciz"] = 0
                 daktilo_kutu.configure(state="normal"); daktilo_kutu.delete("1.0", "end")
