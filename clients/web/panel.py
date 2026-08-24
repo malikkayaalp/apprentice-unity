@@ -19,6 +19,79 @@ HOME = ""
 DEPO: IsDeposu | None = None
 KILIT = threading.Lock()
 SAYFA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "panel.html")
+AYAR: dict = {}
+METIN_UZANTILAR = (".py", ".md", ".txt", ".json", ".csv", ".html", ".js", ".ts", ".cs",
+                   ".yaml", ".yml", ".xml", ".toml", ".ini", ".sql", ".sh", ".bat", ".css")
+
+
+def _ayar_yolu() -> str:
+    return os.path.join(HOME, "panel_ayar.json")
+
+
+def _ayar_yukle():
+    global AYAR
+    try:
+        with open(_ayar_yolu(), encoding="utf-8") as f:
+            AYAR = json.load(f)
+    except Exception:
+        AYAR = {}
+    AYAR.setdefault("kok", HOME)          # calisma alani: kullanicinin proje klasoru
+
+
+def _ayar_kaydet():
+    try:
+        with open(_ayar_yolu(), "w", encoding="utf-8", newline="\n") as f:
+            json.dump(AYAR, f, ensure_ascii=False, indent=1)
+    except OSError:
+        pass
+
+
+def _kok_sec() -> dict:
+    """Yerel klasor secme diyalogu (panel yerelde kosar - gercek Windows penceresi).
+    tkinter ana surecte sorun cikarmasin diye ayri Python surecinde acilir."""
+    import subprocess
+    kod = ("import tkinter, tkinter.filedialog as f\n"
+           "r = tkinter.Tk(); r.withdraw(); r.attributes('-topmost', 1)\n"
+           "print(f.askdirectory(title='Apprentice calisma alani sec'))")
+    try:
+        r = subprocess.run([sys.executable, "-c", kod], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=300)
+        yol = (r.stdout or "").strip()
+        if yol and os.path.isdir(yol):
+            AYAR["kok"] = os.path.abspath(yol)
+            _ayar_kaydet()
+            return {"kok": AYAR["kok"]}
+        return {"kok": AYAR.get("kok", HOME), "iptal": True}
+    except Exception as e:  # noqa: BLE001
+        return {"hata": str(e)[:200]}
+
+
+def _ekleri_kaydet(ekler: list, hedef_dir: str, yalniz_metin: bool) -> tuple:
+    """Panelden gelen ekleri diske yazar. Doner: (yollar, reddedilenler)."""
+    import base64
+    os.makedirs(hedef_dir, exist_ok=True)
+    yollar, red = [], []
+    for e in (ekler or [])[:6]:
+        ad = os.path.basename(str(e.get("ad") or "ek"))
+        if yalniz_metin and not ad.lower().endswith(METIN_UZANTILAR):
+            red.append(ad + " (cirak yalniz metin alir)")
+            continue
+        yol = os.path.join(hedef_dir, ad)
+        try:
+            if e.get("b64") is not None:
+                veri = base64.b64decode(str(e["b64"]).split(",")[-1])
+                if len(veri) > 8_000_000:
+                    red.append(ad + " (8 MB siniri)")
+                    continue
+                with open(yol, "wb") as f:
+                    f.write(veri)
+            else:
+                with open(yol, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(str(e.get("icerik") or "")[:2_000_000])
+            yollar.append(yol)
+        except OSError as hata:
+            red.append("%s (%s)" % (ad, str(hata)[:60]))
+    return yollar, red
 
 
 def _sistem() -> dict:
@@ -44,8 +117,46 @@ def _sistem() -> dict:
     return out
 
 
+_USTA_TAMAM: set = set()
+
+
+def _usta_rapor_tamamla(jid: str):
+    """Panelden baslatilan islerde usta_rapor olayini MCP yolu yazmaz (o yol worker_status'ta);
+    is bitince panel kendisi isler - kullanici geri bildirimi: 'usta raporunu hic gormedim'."""
+    if jid in _USTA_TAMAM:
+        return
+    yol = os.path.join(DEPO.jobs_dir, jid, "events.jsonl")
+    try:
+        metin = open(yol, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return
+    if '"usta_rapor"' in metin or '"exit"' not in metin:
+        if '"usta_rapor"' in metin:
+            _USTA_TAMAM.add(jid)
+        return
+    try:
+        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        import importlib
+        srv = importlib.import_module("server.apprentice_server")
+        rep = srv.rapor_diskten(jid) or {}
+        with open(yol, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "usta_rapor", "t": time.time(),
+                                "derleme_durumu": rep.get("derleme_durumu"),
+                                "dosya": [d["yol"] for d in rep.get("yazilan_dosyalar", [])],
+                                "hata_sayisi": len(rep.get("hatalar", [])),
+                                "uyarilar": [k for k in ("duragan", "ruff_uyarilari",
+                                                         "butce_uyarisi", "hafiza_uyarisi",
+                                                         "durum_uyarisi") if rep.get(k)],
+                                "kullanim": rep.get("kullanim") or {}},
+                               ensure_ascii=False) + "\n")
+        _USTA_TAMAM.add(jid)
+    except Exception:
+        pass
+
+
 def _olaylar(jid: str, n: int) -> dict:
     with KILIT:
+        _usta_rapor_tamamla(jid)
         DEPO.tazele(jid)
         s = dict(DEPO.durumlar.get(jid) or {})
         ev = DEPO.olaylar.get(jid) or []
@@ -106,18 +217,39 @@ def _gorev_baslat(veri: dict) -> dict:
         return {"hata": "bilinmeyen ortam %r (var: %s)" % (ortam, list(srv.ENVS))}
     dogrulama = str(veri.get("dogrulama") or "derleme")
     kapali_ek = ["run_tests", "run_shell"] if dogrulama == "derleme" else []
-    # calisma dizini EVE gore cozulur ve yoksa yaratilir (panelin MCP koku yok)
+    # calisma dizini SECILI CALISMA ALANINA gore cozulur (kullanicinin proje klasoru;
+    # ust bardaki klasor secici belirler, varsayilan panel evi)
     dizin = str(veri.get("calisma_dizini") or "panel").strip().replace("\\", "/")
     if ".." in dizin or os.path.isabs(dizin):
-        return {"hata": "calisma_dizini eve goreli olmali"}
-    tam_dizin = os.path.join(HOME, dizin)
+        return {"hata": "calisma_dizini calisma alanina goreli olmali"}
+    tam_dizin = os.path.join(AYAR.get("kok", HOME), dizin)
     os.makedirs(tam_dizin, exist_ok=True)
-    job = srv.Job(ortam, gorev, kriterler, "", False, 3,
-                  srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model"),
+    # ekler: metin dosyalari dogrudan calisma dizinine - `ara` (RAG) otomatik indeksler
+    ek_yollar, ek_red = _ekleri_kaydet(veri.get("ekler") or [], tam_dizin, yalniz_metin=True)
+    if ek_yollar:
+        gorev += ("\n\nEKLI DOSYALAR (calisma dizininde, gerekirse read_file/ara ile kullan): "
+                  + ", ".join(os.path.basename(y) for y in ek_yollar))
+    model = str(veri.get("model") or "").strip() or \
+        srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
+    # MODEL UYUMU: secilen modelin kartindan ctx siniri alinir - config ctx karttan buyukse
+    # kisilir (olculdu: Ollama pencereyi asan istegi reddediyor; kucuk modelde 128k istemek hata).
+    eski_ctx = os.environ.get("APPRENTICE_CTX")
+    try:
+        kart = _model_kart(model)
+        cfg_ctx = int(srv.config.env_or("APPRENTICE_CTX", "ollama.num_ctx", 131072) or 131072)
+        if kart.get("ctx") and int(kart["ctx"]) < cfg_ctx:
+            os.environ["APPRENTICE_CTX"] = str(int(kart["ctx"]))
+    except Exception:
+        kart = {}
+    job = srv.Job(ortam, gorev, kriterler, "", False, 3, model,
                   "", tam_dizin, kapali_ek, dogrulama,
                   [str(x).strip() for x in (veri.get("yazilabilir") or []) if str(x).strip()],
                   bool(veri.get("harita")), bool(veri.get("canli", True)))
     job.start()
+    if eski_ctx is None:
+        os.environ.pop("APPRENTICE_CTX", None)
+    else:
+        os.environ["APPRENTICE_CTX"] = eski_ctx
     srv.JOBS[job.id] = job
     # ZAMAN ASIMI BEKCISI (Kalman olayinda fark edildi): MCP'deki bekleme dongusu isciyi
     # sinirda oldurur ama panel isleri o donguden gecmez - bekci olmadan sahipsiz kalirlardi.
@@ -157,6 +289,135 @@ def _gorev_baslat(veri: dict) -> dict:
     return {"is_id": job.id, "baslik": baslik}
 
 
+def _ollama_get(yol: str, govde: dict | None = None):
+    import urllib.request
+    url = "http://localhost:11434" + yol
+    if govde is None:
+        r = urllib.request.urlopen(url, timeout=6)
+    else:
+        r = urllib.request.urlopen(urllib.request.Request(
+            url, json.dumps(govde).encode(), {"Content-Type": "application/json"}), timeout=30)
+    return json.load(r)
+
+
+def _modeller() -> dict:
+    """Ollama'daki secilebilir isci modelleri (gomme modelleri haric)."""
+    try:
+        tags = _ollama_get("/api/tags").get("models", [])
+    except Exception as e:  # noqa: BLE001
+        return {"hata": str(e)[:200], "modeller": []}
+    out = []
+    for m in tags:
+        ad = m.get("name", "")
+        if "bge" in ad.lower() or "embed" in ad.lower():
+            continue
+        out.append({"ad": ad, "gb": round(m.get("size", 0) / 1e9, 1)})
+    import importlib
+    varsayilan = ""
+    try:
+        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        srv = importlib.import_module("server.apprentice_server")
+        varsayilan = srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model") or ""
+    except Exception:
+        pass
+    return {"modeller": out, "varsayilan": varsayilan}
+
+
+def _model_kart(ad: str) -> dict:
+    """Model kartindan tavsiye parametreler: /api/show -> parameters + context_length.
+    Isci kosarken temperature yine 0'dir (olculdu: determinizm); kart BILGI + ctx siniri icin."""
+    try:
+        d = _ollama_get("/api/show", {"model": ad})
+    except Exception as e:  # noqa: BLE001
+        return {"hata": str(e)[:200]}
+    kart = {"parametreler": {}, "ctx": None, "aile": (d.get("details") or {}).get("family", "")}
+    for satir in (d.get("parameters") or "").splitlines():
+        parca = satir.split(None, 1)
+        if len(parca) == 2:
+            kart["parametreler"][parca[0]] = parca[1].strip('"')
+    for k, v in (d.get("model_info") or {}).items():
+        if k.endswith("context_length"):
+            kart["ctx"] = v
+    kart["yetenekler"] = d.get("capabilities") or []
+    return kart
+
+
+def _model_yukle() -> dict:
+    """On-isitma: varsayilan isci modelini simdiden RAM'e al (ilk isin ~1 dk yukleme
+    bedelini pesin oder). Ollama zaten tembel yukler; bu dugme yalnizca konfor."""
+    try:
+        import importlib, urllib.request
+        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        srv = importlib.import_module("server.apprentice_server")
+        model = srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
+
+        def isit():
+            try:
+                # soguk yukleme ~1-2 dk: istek arka planda, genis zaman asimiyla
+                urllib.request.urlopen(urllib.request.Request(
+                    "http://localhost:11434/api/generate",
+                    json.dumps({"model": model, "keep_alive": "30m"}).encode(),
+                    {"Content-Type": "application/json"}), timeout=600).read()
+            except Exception:
+                pass
+        threading.Thread(target=isit, daemon=True).start()
+        return {"durum": "yukleniyor", "model": model}
+    except Exception as e:  # noqa: BLE001
+        return {"hata": str(e)[:200]}
+
+
+def _model_bosalt() -> dict:
+    """Eject: yuklu modelleri RAM/VRAM'den indir (keep_alive: 0). Sonraki is yeniden yukler."""
+    try:
+        yuklu = [m.get("name") for m in _ollama_get("/api/ps").get("models", [])]
+        for ad in yuklu:
+            _ollama_get("/api/generate", {"model": ad, "keep_alive": 0})
+        return {"bosaltilan": yuklu}
+    except Exception as e:  # noqa: BLE001
+        return {"hata": str(e)[:200]}
+
+
+SOHBET = {"mesajlar": []}          # cirakla serbest sohbet (gorev kalibi yok, hafizali)
+
+
+def _cirak_sohbet(veri: dict) -> dict:
+    """Cirakla DUZ sohbet: worker_run kalibi (kriter/dogrulama/rapor) YOK - dogrudan Ollama.
+    Kullanici geri bildirimi: 'her sorumda gorev basliyor, kriter istiyor'. Gorev kipi is
+    yaptirir, sohbet kipi konusur. Hafiza: son 20 mesaj; temperature 0.7 (sohbet, is degil)."""
+    import importlib, urllib.request
+    prompt = str(veri.get("prompt") or "").strip()
+    if veri.get("sifirla"):
+        SOHBET["mesajlar"] = []
+        if not prompt:
+            return {"cevap": "", "sifirlandi": True}
+    if not prompt:
+        return {"hata": "bos"}
+    os.environ.setdefault("APPRENTICE_HOME", HOME)
+    srv = importlib.import_module("server.apprentice_server")
+    model = str(veri.get("model") or "").strip() or \
+        srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
+    SOHBET["mesajlar"].append({"role": "user", "content": prompt})
+    body = json.dumps({"model": model, "stream": False,
+                       "messages": [{"role": "system", "content":
+                                     "Sen Apprentice sisteminin yerel cirak modelisin (%s). "
+                                     "Turkce, kisa ve net cevap ver. Kod isleri icin kullanici "
+                                     "gorev kipini kullanir; burada serbest sohbettesin."
+                                     % model.split("/")[-1].split(":")[0]}]
+                       + SOHBET["mesajlar"][-20:],
+                       "options": {"num_ctx": 16384, "temperature": 0.7, "num_predict": 1200},
+                       "keep_alive": "30m"}).encode()
+    try:
+        d = json.load(urllib.request.urlopen(urllib.request.Request(
+            "http://localhost:11434/api/chat", body, {"Content-Type": "application/json"}),
+            timeout=600))
+        cevap = ((d.get("message") or {}).get("content") or "").strip()
+        SOHBET["mesajlar"].append({"role": "assistant", "content": cevap})
+        return {"cevap": cevap, "tok": d.get("eval_count")}
+    except Exception as e:  # noqa: BLE001
+        SOHBET["mesajlar"].pop()
+        return {"hata": str(e)[:250]}
+
+
 def _usta_istek(veri: dict) -> dict:
     """Panelden Claude CLI'ya BASSIZ istek (claude -p). Desktop gerekmez; kullanicinin
     girisiyle calisir. Her istek Max kotasindan harcar - o yuzden yalnizca kullanici
@@ -177,14 +438,57 @@ def _usta_istek(veri: dict) -> dict:
     with open(yol, "w", encoding="utf-8", newline="\n") as f:
         json.dump(kayit, f, ensure_ascii=False)
 
+    kayit["model"] = str(veri.get("model") or "")
+    kayit["effort"] = str(veri.get("effort") or "")
+    kayit["cli"] = str(veri.get("cli") or "claude")
+    sablon = str(veri.get("sablon") or "")
+    # ekler (resim dahil): calisma alanindaki panel_ekler/ altina; Claude yollariyla okur
+    ek_yollar, ek_red = _ekleri_kaydet(veri.get("ekler") or [],
+                                       os.path.join(AYAR.get("kok", HOME), "panel_ekler"),
+                                       yalniz_metin=False)
+    if ek_yollar:
+        # talimat BASTA ve emir kipinde: sona eklenen not gorulup gecildi (yasandi -
+        # Claude Read'i cagirmadan "gorsel yok" dedi). Yollar normalize edilir.
+        yollar = "\n".join(os.path.normpath(y) for y in ek_yollar)
+        prompt = ("ONCE su dosyalari Read araciyla TEK TEK AC ve iceriklerini gor "
+                  "(kullanici panelden ekledi; resimler dahil - Read resimleri gosterir):\n"
+                  + yollar + "\n\nSONRA kullanicinin istegini cevapla:\n" + prompt)
+        kayit["ekler"] = [os.path.basename(y) for y in ek_yollar]
+    kayit["prompt"] = prompt
+
     def kos():
-        cmd = ["claude", "-p", prompt, "--output-format", "text"]
-        if kayit["araclar"]:
-            cmd += ["--allowedTools", "mcp__apprentice__worker_run,mcp__apprentice__worker_status"]
+        # KRITIK (yasandi): shell=True + cok satirli prompt arguman olarak verilince cmd.exe
+        # satir sonunu KOMUT AYRACI sayiyor - Claude'a yalniz ilk satir ulasiyordu (ek yollari,
+        # canli:true notu sessizce dusuyordu). Prompt artik STDIN'den gider; komutta yalniz
+        # tek satirlik bayraklar durur.
+        girdi = prompt
+        if kayit["cli"] == "ozel" and sablon:
+            if "{prompt}" in sablon:
+                cmd = sablon.replace("{prompt}", '"' + prompt.replace('"', "'").replace("\n", " ") + '"')
+                girdi = None
+            else:
+                cmd = sablon                       # sablon {prompt} icermiyorsa stdin'den
+        else:
+            parcalar = ["claude", "-p", "--output-format", "text"]
+            if kayit["model"]:
+                parcalar += ["--model", kayit["model"]]
+            if kayit["effort"]:
+                parcalar += ["--effort", kayit["effort"]]
+            izinler = []
+            if kayit["araclar"]:
+                izinler += ["mcp__apprentice__worker_run", "mcp__apprentice__worker_status"]
+                girdi += ("\n\n(Not: worker_run cagirirken canli:true parametresini "
+                          "ekle - kullanici paneldeki canli akista izliyor. bekle:true "
+                          "kullan; is bitince sonucu kisaca degerlendir.)")
+            if ek_yollar:
+                izinler.append("Read")             # ekleri (resim dahil) okuyabilsin
+            if izinler:
+                parcalar += ["--allowedTools", '"%s"' % ",".join(izinler)]
+            cmd = " ".join(parcalar)
         env = dict(os.environ, APPRENTICE_HOME=HOME, APPRENTICE_IZLEYICI="0",
                    PYTHONIOENCODING="utf-8")
         try:
-            r = _sp.run(cmd, capture_output=True, text=True, encoding="utf-8",
+            r = _sp.run(cmd, input=girdi, capture_output=True, text=True, encoding="utf-8",
                         errors="replace", timeout=600, cwd=ROOT, env=env, shell=True)
             kayit["cevap"] = (r.stdout or "").strip() or ("HATA: " + (r.stderr or "")[-500:])
             kayit["durum"] = "bitti" if r.returncode == 0 else "hata"
@@ -198,6 +502,21 @@ def _usta_istek(veri: dict) -> dict:
     return {"id": uid}
 
 
+def _sahipsiz_kontrol(k: dict, yol: str) -> dict:
+    """Panel yeniden baslarsa kosan istegin is parcacigi olur ama kayit 'calisiyor' kalir -
+    sonsuz 'dusunuyor' gorunumu (yasandi: 1016 sn). 700 sn ustu calisiyor = sahipsiz say."""
+    if k.get("durum") == "calisiyor" and time.time() - k.get("baslangic", 0) > 700:
+        k["durum"] = "hata"
+        k["cevap"] = "istek sahipsiz kaldi (panel yeniden baslatildi ya da 700 sn zaman asimi)"
+        k["sure"] = round(time.time() - k.get("baslangic", time.time()), 1)
+        try:
+            with open(yol, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(k, f, ensure_ascii=False)
+        except OSError:
+            pass
+    return k
+
+
 def _usta_liste() -> list:
     kdir = os.path.join(HOME, "usta_istekler")
     out = []
@@ -206,9 +525,13 @@ def _usta_liste() -> list:
             try:
                 with open(os.path.join(kdir, ad), encoding="utf-8") as f:
                     k = json.load(f)
+                k = _sahipsiz_kontrol(k, os.path.join(kdir, ad))
                 out.append({"id": k["id"], "durum": k.get("durum"),
                             "ozet": k.get("prompt", "")[:60],
-                            "sure": k.get("sure"), "araclar": k.get("araclar")})
+                            "baslangic": k.get("baslangic"),
+                            "sure": k.get("sure") if k.get("sure") is not None
+                            else round(time.time() - k.get("baslangic", time.time()), 0),
+                            "araclar": k.get("araclar")})
             except Exception:
                 pass
     return out
@@ -218,7 +541,7 @@ def _usta_cevap(uid: str) -> dict:
     yol = os.path.join(HOME, "usta_istekler", uid + ".json")
     try:
         with open(yol, encoding="utf-8") as f:
-            return json.load(f)
+            return _sahipsiz_kontrol(json.load(f), yol)
     except Exception:
         return {"hata": "istek yok"}
 
@@ -254,20 +577,97 @@ class Istek(BaseHTTPRequestHandler):
                 self._gonder({"istekler": _usta_liste()})
             elif yol.path == "/api/usta_cevap":
                 self._gonder(_usta_cevap(q.get("id", "")))
+            elif yol.path == "/api/kok":
+                self._gonder({"kok": AYAR.get("kok", HOME)})
+            elif yol.path == "/api/modeller":
+                self._gonder(_modeller())
+            elif yol.path == "/api/model_kart":
+                self._gonder(_model_kart(q.get("ad", "")))
             else:
                 self._gonder({"hata": "yok"}, kod=404)
         except Exception as e:  # noqa: BLE001
             self._gonder({"hata": str(e)[:300]}, kod=500)
 
+    def _sohbet_akisi(self, veri: dict):
+        """Cirak sohbetini TOKEN TOKEN akit (Ollama stream -> chunked yanit).
+        Kullanici geri bildirimi: 'her sey bir anda geliyor, akis yok'."""
+        import importlib, urllib.request
+        prompt = str(veri.get("prompt") or "").strip()
+        if veri.get("sifirla"):
+            SOHBET["mesajlar"] = []
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        if not prompt:
+            return
+        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        srv = importlib.import_module("server.apprentice_server")
+        model = str(veri.get("model") or "").strip() or \
+            srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
+        SOHBET["mesajlar"].append({"role": "user", "content": prompt})
+        body = json.dumps({"model": model, "stream": True,
+                           "messages": [{"role": "system", "content":
+                                         "Sen Apprentice sisteminin yerel cirak modelisin (%s). "
+                                         "Turkce, kisa ve net cevap ver."
+                                         % model.split("/")[-1].split(":")[0]}]
+                           + SOHBET["mesajlar"][-20:],
+                           "options": {"num_ctx": 16384, "temperature": 0.7,
+                                       "num_predict": 1200},
+                           "keep_alive": "30m"}).encode()
+        parcalar = []
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    "http://localhost:11434/api/chat", body,
+                    {"Content-Type": "application/json"}), timeout=600) as r:
+                for ham in r:
+                    try:
+                        d = json.loads(ham)
+                    except Exception:
+                        continue
+                    p = (d.get("message") or {}).get("content") or ""
+                    if p:
+                        parcalar.append(p)
+                        self.wfile.write(p.encode("utf-8"))
+                        self.wfile.flush()
+        except Exception as e:  # noqa: BLE001
+            try:
+                self.wfile.write(("\n[HATA: %s]" % str(e)[:200]).encode("utf-8"))
+            except OSError:
+                pass
+        cevap = "".join(parcalar).strip()
+        if cevap:
+            SOHBET["mesajlar"].append({"role": "assistant", "content": cevap})
+        else:
+            SOHBET["mesajlar"].pop()
+
     def do_POST(self):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             veri = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+            if urllib.parse.urlparse(self.path).path == "/api/cirak_sohbet_akis":
+                return self._sohbet_akisi(veri)
             yolu = urllib.parse.urlparse(self.path).path
             if yolu == "/api/gorev":
                 self._gonder(_gorev_baslat(veri))
             elif yolu == "/api/usta":
                 self._gonder(_usta_istek(veri))
+            elif yolu == "/api/cirak_sohbet":
+                self._gonder(_cirak_sohbet(veri))
+            elif yolu == "/api/eject":
+                self._gonder(_model_bosalt())
+            elif yolu == "/api/yukle":
+                self._gonder(_model_yukle())
+            elif yolu == "/api/kok_sec":
+                self._gonder(_kok_sec())
+            elif yolu == "/api/kok":
+                y = str(veri.get("yol") or "").strip()
+                if y and os.path.isdir(y):
+                    AYAR["kok"] = os.path.abspath(y); _ayar_kaydet()
+                    self._gonder({"kok": AYAR["kok"]})
+                else:
+                    self._gonder({"hata": "klasor bulunamadi: %s" % y})
             else:
                 self._gonder({"hata": "yok"}, kod=404)
         except Exception as e:  # noqa: BLE001
@@ -284,6 +684,7 @@ def main() -> int:
     a = ap.parse_args()
     HOME = os.path.expanduser(a.home)
     DEPO = IsDeposu(HOME)
+    _ayar_yukle()
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Istek)
     url = "http://127.0.0.1:%d" % a.port
     print("Apprentice Web Panel: %s  (ev: %s)" % (url, HOME))

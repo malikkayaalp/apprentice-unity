@@ -424,8 +424,10 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
 
     son_yazim = [0.0]
 
-    def akit(_parca, toplam):
-        if time.time() - son_yazim[0] > 0.15:
+    def akit(_parca, toplam, zorla=False):
+        # zorla=True: tur sonu yazimi kismaya TAKILMASIN - son parca bazen diske hic
+        # dusmuyordu, panelde metin yarim kaliyordu (yasandi: "Dosya|" kesigi).
+        if zorla or time.time() - son_yazim[0] > 0.15:
             son_yazim[0] = time.time()
             try:
                 with open(canli_yol, "w", encoding="utf-8", newline="\n") as f:
@@ -452,6 +454,14 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
         from core.client import tc_name, tc_args
         calls = turn.tool_calls or []
         icerik = (turn.content or "").strip()
+        # tur bitti: SON halini kisma olmadan diske bas (yarim metin kalmasin).
+        # chat_stream XML cagrilari icerikten temizler; ham akis gorunumu icin cagri
+        # metnini de geri ekleyerek yaz - panel ne uretildiyse onu gorsun.
+        ham_gorunum = icerik
+        for c in calls:
+            ham_gorunum += "\n<function=%s>...(%d parametre)</function>" % (
+                tc_name(c), len(tc_args(c)))
+        akit("", ham_gorunum if ham_gorunum.strip() else icerik, zorla=True)
         if not calls:
             res.final_text = icerik
             res.stopped = "done"
@@ -471,10 +481,9 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
                              "ARAC SONUCLARI:\n" + json.dumps(sonuclar, ensure_ascii=False)[:8000]})
     else:
         res.stopped = "max_steps"
-    try:                                                       # tur bitti: canli ekran temiz
-        open(canli_yol, "w", encoding="utf-8").write("")
-    except OSError:
-        pass
+    # Is sonunda dosya SILINMEZ: son uretim panelde kalsin (silinince panel son tam metni
+    # yakalayamadan kaybediyordu - "yarim yazi" gorunumunun ikinci sebebi). Yeni turun ilk
+    # yazimi zaten bastan yazar; izleyici on-ek degisince kendini sifirlar.
     return res
 
 

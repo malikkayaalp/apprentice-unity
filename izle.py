@@ -84,6 +84,7 @@ class IsDeposu:
             job = {}
         return {"id": jid, "ortam": job.get("ortam", "?"), "gorev": job.get("gorev", ""),
                 "kaynak": job.get("kaynak", ""), "baslik": job.get("baslik", ""),
+                "canli": job.get("canli", False),
                 "dogrulama": job.get("dogrulama", "tam"), "baslangic": job.get("baslangic"),
                 "durum": "calisiyor", "derleme": "-", "tur": 0, "sure": None, "kullanim": {},
                 "dosyalar": [], "uyarilar": [], "hatalar": [], "ozet": "", "son_yazim": None,
