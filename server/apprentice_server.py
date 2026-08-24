@@ -698,6 +698,18 @@ TOOLS[0]["inputSchema"]["properties"]["bekle"] = {
     "type": "boolean", "default": True,
     "description": "false: hemen is_id ile don, worker_status ile sor (istemci zaman asimi kisaysa)."}
 
+def _panel_bildirimleri_al() -> list:
+    """HOME/panel_bekleyen.json: panelin biraktigi is kimlikleri; oku ve bosalt."""
+    p = os.path.join(HOME, "panel_bekleyen.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            b = json.load(f)
+        os.remove(p)
+        return [str(x) for x in b][:10]
+    except Exception:
+        return []
+
+
 HANDLERS = {"worker_run": tool_worker_run, "worker_status": tool_worker_status}
 
 
@@ -757,6 +769,14 @@ def handle(req: dict) -> dict | None:
             out = fn(p.get("arguments") or {})
         except Exception as e:  # noqa: BLE001
             out = {"hata": "%s: %s" % (type(e).__name__, e)}
+        # PANEL BILDIRIMI: web panelinden gonderilen isler kutuya yazilir; usta bir sonraki
+        # HER arac cagrisinda gorur (MCP'de sunucu ustayi kendiliginden uyandiramaz - bu
+        # durust kanal). Okununca kutu bosaltilir.
+        if isinstance(out, dict):
+            b = _panel_bildirimleri_al()
+            if b:
+                out["panel_bildirimi"] = ("Web panelinden %d is gonderildi - worker_status(is_id) "
+                                          "ile incele: %s" % (len(b), ", ".join(b)))
         return {"jsonrpc": "2.0", "id": rid, "result": {
             "content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False, indent=1)}],
             "structuredContent": out,

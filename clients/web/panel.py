@@ -61,9 +61,16 @@ def _olaylar(jid: str, n: int) -> dict:
     try:
         with open(os.path.join(DEPO.jobs_dir, jid, "canli.txt"), encoding="utf-8",
                   errors="replace") as f:
-            canli = f.read()[-8000:]
+            canli = f.read()[:20000]
     except OSError:
         pass
+    if n == 0:                                        # ilk cekilise iscinin tam promptu da girer
+        try:
+            with open(os.path.join(DEPO.jobs_dir, jid, "prompt.txt"), encoding="utf-8",
+                      errors="replace") as f:
+                s["prompt"] = f.read()[:5000]
+        except OSError:
+            pass
     s.pop("son_yazim", None)
     return {"ozet": s, "yeni": yeni, "toplam": n + len(yeni), "canli": canli}
 
@@ -78,7 +85,9 @@ def _is_listesi() -> list:
             s = DEPO.durumlar.get(jid) or {}
             out.append({"id": jid, "ortam": s.get("ortam", "?"), "durum": s.get("durum", "?"),
                         "derleme": s.get("derleme", "?"), "asama": s.get("asama", "?"),
-                        "kaynak": s.get("kaynak", ""), "sure": s.get("sure")})
+                        "kaynak": s.get("kaynak", ""), "sure": s.get("sure"),
+                        "baslik": s.get("baslik") or
+                        " ".join((s.get("gorev") or "").split()[:6])[:48]})
         return out
 
 
@@ -122,15 +131,30 @@ def _gorev_baslat(veri: dict) -> dict:
     threading.Timer(sinir, _bekci).start()
     # kaynak isareti: usta ve izleyiciler bu isin panelden geldigini gorsun
     jp = os.path.join(job.dir, "job.json")
+    baslik = str(veri.get("baslik") or "").strip() or " ".join(gorev.split()[:6])[:48]
     try:
         with open(jp, encoding="utf-8") as f:
             j = json.load(f)
         j["kaynak"] = "web-panel"
+        j["baslik"] = baslik
         with open(jp, "w", encoding="utf-8", newline="\n") as f:
             json.dump(j, f, ensure_ascii=False, indent=1)
     except OSError:
         pass
-    return {"is_id": job.id}
+    # usta kutusu: MCP sunucusu bir sonraki arac cagrisinda bildirir
+    bp = os.path.join(HOME, "panel_bekleyen.json")
+    try:
+        try:
+            with open(bp, encoding="utf-8") as f:
+                b = json.load(f)
+        except Exception:
+            b = []
+        b.append(job.id)
+        with open(bp, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(b[-10:], f)
+    except OSError:
+        pass
+    return {"is_id": job.id, "baslik": baslik}
 
 
 class Istek(BaseHTTPRequestHandler):

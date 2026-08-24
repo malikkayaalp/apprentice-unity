@@ -491,6 +491,7 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
     adim_sayisi = 0
     onceki_imzalar: frozenset | None = None
     duragan = False
+    ilk_prompt = None            # ilk model cagrisinin GERCEK baglami (sistem+gorev, Ollama sayar)
     while True:
         if canli_yol and os.environ.get("APPRENTICE_CANLI") == "1":
             res = canli_run(msgs, tools, dispatch, model, canli_yol)
@@ -499,6 +500,8 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
                             num_ctx=NUM_CTX, temperature=0.0, num_predict=6000, retries=2,
                             extra_options={"num_batch": NUM_BATCH})
         kullanim.merge(res.metrics); adim_sayisi += len(res.turns)
+        if ilk_prompt is None and res.turns:
+            ilk_prompt = getattr(res.turns[0].metrics, "prompt_tokens", None)
         msgs[:] = res.messages
         errs = compile_errors(jail, written)
         imzalar: frozenset | None = None
@@ -530,6 +533,8 @@ def one_request(jail: Jail, dispatch, written: list, msgs: list, request: str,
                      "\nIlgili dosyayi read_file ile oku, sebebi bul ve write_file ile "
                      "duzeltilmis TAM dosyayi yaz."})
     k = kullanim.as_dict(); k["model_cagrisi"] = adim_sayisi
+    if ilk_prompt:
+        k["ilk_prompt_tokens"] = ilk_prompt
     # Butce bekcisi: cagri basina ortalama prompt 17k'yi asiyorsa filtreleme birakilmis demektir
     # (rapor uyarisi; sert sinir degil - karari usta verir).
     ort = (k.get("prompt_tokens") or 0) / max(1, adim_sayisi)
@@ -667,7 +672,8 @@ def main() -> int:
                     em.emit("system", subtype="harita_hatasi", error=str(e)[:200])
             # Izlenebilirlik: sistem istemine NE girdigini izleyici gorsun (boyutlar karakter)
             em.emit("baglam", sistem=len(sistem), hafiza=len(hafiza), durum=len(durum),
-                    harita=harita_n, araclar=[t["function"]["name"] for t in tools])
+                    harita=harita_n, araclar=[t["function"]["name"] for t in tools],
+                    sistem_metin=sistem[:4000])        # izleyici tam metni gosterebilsin
             msgs = [{"role": "system", "content": sistem}]
         canli_yol = os.path.join(os.path.dirname(os.path.abspath(a.jsonl)), "canli.txt") \
             if a.jsonl else ""
