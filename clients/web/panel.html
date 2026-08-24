@@ -54,10 +54,14 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
   background:transparent;color:var(--soluk);cursor:pointer;font-size:11px}
 #yerlesimSifirla:hover{color:var(--metin);border-color:var(--cizgi)}
 
-#alan{position:relative;height:calc(100% - 48px);font-size:calc(13px*var(--f))}
-.kart{position:absolute;display:flex;flex-direction:column;min-width:180px;min-height:110px;
+#alan{position:relative;height:calc(100% - 48px);font-size:calc(13px*var(--f));
+  overflow-y:auto;overflow-x:hidden}
+.kart{position:absolute;display:flex;flex-direction:column;
   border:1px solid var(--cizgi2);border-radius:13px;background:var(--panel);
-  backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4);overflow:hidden}
+  backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4);overflow:hidden;
+  transition:left .18s ease,top .18s ease,width .18s ease,height .18s ease}
+.kart.tasiniyor{transition:none;opacity:.92;box-shadow:0 18px 50px rgba(0,0,0,.65);
+  border-color:var(--vurgu)}
 .kart.onde{border-color:var(--cizgi);box-shadow:0 14px 44px rgba(0,0,0,.55)}
 .kbaslik{padding:7px 12px;font:700 .78em var(--mono);letter-spacing:1.4px;color:var(--soluk);
   border-bottom:1px solid var(--cizgi2);display:flex;align-items:center;gap:8px;
@@ -275,30 +279,68 @@ let seciliIs=null, imlecN=0, filtre="tumu", takip=true, olaylar=[], t0=null;
 let daktiloHedef="", daktiloCiz=0, dosyalar={}, seciliDosya=null, dosyaElle=false;
 let girisKartlariEklendi=false, sonOzet={};
 
-/* --------------- yerlesim: suruklenebilir + boyutlanabilir paneller --------------- */
+/* --------------- akilli izgara yerlesimi (gridstack-mini) ---------------
+   24 sutunluk gorunmez izgara: tasima/boyutlandirma hucreye SNAP eder; cakisan panel
+   ASAGI itilir (ust uste binmek imkansiz); birakinca herkes YUKARI sikisir (bosluk kalmaz).
+   Digerleri CSS gecissiyle yumusak kayar - "sezgisel" his buradan gelir. */
+const SUTUN=24, SATIR=24;
 const VARSAYILAN={
-  isler:{x:.005,y:.01,w:.185,h:.97},
-  boru:{x:.196,y:.01,w:.52,h:.17},
-  akis:{x:.196,y:.19,w:.52,h:.5},
-  daktilo:{x:.196,y:.70,w:.52,h:.28},
-  metrik:{x:.722,y:.01,w:.272,h:.19},
-  ozet:{x:.722,y:.21,w:.272,h:.30},
-  dosyalar:{x:.722,y:.52,w:.272,h:.46}};
+  isler:{gx:0,gy:0,gw:5,gh:24}, boru:{gx:5,gy:0,gw:12,gh:4},
+  akis:{gx:5,gy:4,gw:12,gh:12}, daktilo:{gx:5,gy:16,gw:12,gh:8},
+  metrik:{gx:17,gy:0,gw:7,gh:5}, ozet:{gx:17,gy:5,gw:7,gh:7},
+  dosyalar:{gx:17,gy:12,gw:7,gh:12}};
 let yerlesim=null;
-try{yerlesim=JSON.parse(localStorage.getItem("apprentice_yerlesim_v2"))||null}catch(e){}
-if(!yerlesim)yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));
-let ustZ=10;
+try{yerlesim=JSON.parse(localStorage.getItem("apprentice_yerlesim_v3"))||null}catch(e){}
+if(!yerlesim||!yerlesim.isler||yerlesim.isler.gx===undefined)
+  yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));
+let ustZ=10, surukluAd=null;
+
+function hucre(){const A=$("#alan").getBoundingClientRect();
+  return {w:A.width/SUTUN,h:Math.max(30,A.height/SATIR),ax:A.left,ay:A.top}}
+function cakisir(a,b){return !(a.gx+a.gw<=b.gx||b.gx+b.gw<=a.gx||a.gy+a.gh<=b.gy||b.gy+b.gh<=a.gy)}
+
+function itele(){
+  // suruklenen sabit kalir; onunla (ve birbirleriyle) cakisanlar asagi itilir
+  const adlar=Object.keys(yerlesim).sort((a,b)=>yerlesim[a].gy-yerlesim[b].gy);
+  let koruma=0, degisti=true;
+  while(degisti&&koruma++<300){degisti=false;
+    for(const a of adlar)for(const b of adlar){
+      if(a===b)continue;
+      const p=yerlesim[a],q=yerlesim[b];
+      if(!cakisir(p,q))continue;
+      const itilen=(b===surukluAd)?a:b;          // surukleneni ASLA itme
+      const sabit=(itilen===a)?b:a;
+      yerlesim[itilen].gy=yerlesim[sabit].gy+yerlesim[sabit].gh;
+      degisti=true;
+    }
+  }
+}
+function sikistir(){
+  // yukari sikistirma: bosluk birakma (suruklenen haric - kullanicinin eli nerede o orada)
+  const adlar=Object.keys(yerlesim).filter(a=>a!==surukluAd)
+    .sort((a,b)=>yerlesim[a].gy-yerlesim[b].gy);
+  for(const a of adlar){
+    const p=yerlesim[a];
+    while(p.gy>0){
+      p.gy--;
+      const carpti=Object.keys(yerlesim).some(b=>b!==a&&cakisir(p,yerlesim[b]));
+      if(carpti){p.gy++;break}
+    }
+  }
+}
 function uygula(){
-  const A=$("#alan").getBoundingClientRect();
+  const h=hucre();
   document.querySelectorAll(".kart").forEach(k=>{
     const p=yerlesim[k.dataset.p]; if(!p)return;
-    k.style.left=(p.x*A.width)+"px"; k.style.top=(p.y*A.height)+"px";
-    k.style.width=(p.w*A.width)+"px"; k.style.height=(p.h*A.height)+"px";
+    k.style.left=(p.gx*h.w+3)+"px"; k.style.top=(p.gy*h.h+3)+"px";
+    k.style.width=(p.gw*h.w-6)+"px"; k.style.height=(p.gh*h.h-6)+"px";
   });
 }
-function kaydet(){localStorage.setItem("apprentice_yerlesim_v2",JSON.stringify(yerlesim))}
+function duzenle(){itele();sikistir();itele();uygula()}
+function kaydet(){localStorage.setItem("apprentice_yerlesim_v3",JSON.stringify(yerlesim))}
 window.addEventListener("resize",uygula);
 $("#yerlesimSifirla").onclick=()=>{yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));kaydet();uygula()};
+
 document.querySelectorAll(".kart").forEach(k=>{
   const ad=k.dataset.p;
   k.addEventListener("pointerdown",()=>{k.style.zIndex=++ustZ;
@@ -306,20 +348,30 @@ document.querySelectorAll(".kart").forEach(k=>{
   const bas=k.querySelector(".kbaslik");
   bas.addEventListener("pointerdown",e=>{
     if(e.target.closest(".kek"))return;
-    const A=$("#alan").getBoundingClientRect(), p=yerlesim[ad];
-    const sx=e.clientX,sy=e.clientY,ox=p.x,oy=p.y;
-    function tasi(ev){p.x=Math.min(.98,Math.max(0,ox+(ev.clientX-sx)/A.width));
-      p.y=Math.min(.97,Math.max(0,oy+(ev.clientY-sy)/A.height));uygula()}
-    function birak(){removeEventListener("pointermove",tasi);removeEventListener("pointerup",birak);kaydet()}
+    const p=yerlesim[ad], h=hucre();
+    const sx=e.clientX,sy=e.clientY,ox=p.gx,oy=p.gy;
+    surukluAd=ad; k.classList.add("tasiniyor");
+    function tasi(ev){
+      const ngx=Math.max(0,Math.min(SUTUN-p.gw,ox+Math.round((ev.clientX-sx)/h.w)));
+      const ngy=Math.max(0,oy+Math.round((ev.clientY-sy)/h.h));
+      if(ngx!==p.gx||ngy!==p.gy){p.gx=ngx;p.gy=ngy;duzenle()}
+    }
+    function birak(){removeEventListener("pointermove",tasi);removeEventListener("pointerup",birak);
+      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet()}
     addEventListener("pointermove",tasi);addEventListener("pointerup",birak);e.preventDefault();
   });
   const tut=k.querySelector(".tutamak");
   if(tut)tut.addEventListener("pointerdown",e=>{
-    const A=$("#alan").getBoundingClientRect(), p=yerlesim[ad];
-    const sx=e.clientX,sy=e.clientY,ow=p.w,oh=p.h;
-    function boyut(ev){p.w=Math.max(.12,ow+(ev.clientX-sx)/A.width);
-      p.h=Math.max(.1,oh+(ev.clientY-sy)/A.height);uygula()}
-    function birak(){removeEventListener("pointermove",boyut);removeEventListener("pointerup",birak);kaydet()}
+    const p=yerlesim[ad], h=hucre();
+    const sx=e.clientX,sy=e.clientY,ow=p.gw,oh=p.gh;
+    surukluAd=ad; k.classList.add("tasiniyor");
+    function boyut(ev){
+      const ngw=Math.max(3,Math.min(SUTUN-p.gx,ow+Math.round((ev.clientX-sx)/h.w)));
+      const ngh=Math.max(2,oh+Math.round((ev.clientY-sy)/h.h));
+      if(ngw!==p.gw||ngh!==p.gh){p.gw=ngw;p.gh=ngh;duzenle()}
+    }
+    function birak(){removeEventListener("pointermove",boyut);removeEventListener("pointerup",birak);
+      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet()}
     addEventListener("pointermove",boyut);addEventListener("pointerup",birak);
     e.preventDefault();e.stopPropagation();
   });
