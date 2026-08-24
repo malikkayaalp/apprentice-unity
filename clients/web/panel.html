@@ -303,6 +303,11 @@ let yerlesim=null;
 try{yerlesim=JSON.parse(localStorage.getItem("apprentice_yerlesim_v3"))||null}catch(e){}
 if(!yerlesim||!yerlesim.isler||yerlesim.isler.gx===undefined)
   yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));
+// GOC: kayitli yerlesim eski surumden olabilir - sonradan eklenen paneller (or. gorev)
+// varsayilandan tamamlanir; yoksa o panel tasinamaz/boyutlanamazdi (yasandi).
+for(const k in VARSAYILAN)
+  if(!yerlesim[k]||yerlesim[k].gx===undefined)
+    yerlesim[k]=JSON.parse(JSON.stringify(VARSAYILAN[k]));
 let ustZ=10, surukluAd=null;
 
 function hucre(){const A=$("#alan").getBoundingClientRect();
