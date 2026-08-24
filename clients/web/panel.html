@@ -384,8 +384,14 @@ for(const k in VARSAYILAN)
 for(const k in yerlesim)if(!VARSAYILAN[k])delete yerlesim[k];   // hayalet panel kalmasin
 let ustZ=10, surukluAd=null;
 
-function hucre(){const A=$("#alan").getBoundingClientRect();
-  return {w:A.width/SUTUN,h:Math.max(30,A.height/SATIR)}}
+function hucre(){
+  const A=$("#alan").getBoundingClientRect();
+  // Pencere daha olcumlenmeden (font/layout hazir degilken) cagrilirsa hucreler minicik
+  // cikiyor ve paneller ust uste biniyordu (yasandi). Gercek olcum yoksa gorunume dus.
+  const g=Math.max(A.width, document.documentElement.clientWidth||0, 900);
+  const y=Math.max(A.height, (document.documentElement.clientHeight||0)-48, 560);
+  return {w:g/SUTUN, h:Math.max(26, y/SATIR)};
+}
 function cakisir(a,b){return !(a.gx+a.gw<=b.gx||b.gx+b.gw<=a.gx||a.gy+a.gh<=b.gy||b.gy+b.gh<=a.gy)}
 function aktifAdlar(){return Object.keys(yerlesim).filter(a=>!gizliPaneller.has(a))}
 function itele(){
@@ -431,6 +437,9 @@ function duzenle(){itele();sikistir();itele();uygula()}
 function kaydet(){localStorage.setItem("apprentice_yerlesim_v4",JSON.stringify(yerlesim))}
 function panelKaydet(){localStorage.setItem("apprentice_gizli_paneller",JSON.stringify([...gizliPaneller]))}
 window.addEventListener("resize",uygula);
+// pencere boyutu gecikmeli kesinlesir (Edge --app acilisi): olcum degisince yeniden yerlestir
+if(window.ResizeObserver)new ResizeObserver(()=>uygula()).observe(document.getElementById("alan"));
+window.addEventListener("load",()=>{uygula();setTimeout(uygula,150);setTimeout(uygula,600);});
 $("#yerlesimSifirla").onclick=()=>{yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));kaydet();duzenle()};
 $("#yerlesimKaydet").onclick=()=>{
   localStorage.setItem("apprentice_yerlesim_profil",
@@ -802,9 +811,9 @@ async function ustaGonder(){
           kacir(r.hata)+
           (/oturum|login/i.test(r.hata)?'<br><button id="girisBtn" style="margin-top:8px;padding:6px 14px;'+
            'border:none;border-radius:9px;cursor:pointer;font-weight:700;color:#fff;'+
-           'background:linear-gradient(135deg,var(--vurgu),#c96a48)">Claude'a giriş yap</button>'+
+           'background:linear-gradient(135deg,var(--vurgu),#c96a48)">Claude&#39;a giriş yap</button>'+
            '<div style="margin-top:6px;color:var(--soluk);font-size:.85em">Claude Desktop girişi '+
-           'CLI'ya geçmez — ayrı oturumdur.</div>':"")+'</div>');
+           'CLI&#39;ya geçmez — ayrı oturumdur.</div>':"")+'</div>');
         const gb=$("#girisBtn");
         if(gb)gb.onclick=async()=>{
           const j=await(await fetch("/api/claude_login",{method:"POST",

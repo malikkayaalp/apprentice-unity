@@ -14,11 +14,14 @@ PENCERESIZ = 0x08000000 if os.name == "nt" else 0
 
 
 def ayakta(port: int) -> bool:
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:%d/api/isler" % port, timeout=2):
-            return True
-    except Exception:
-        return False
+    # ucuz uc: /api/isler sistem yoklamasi yaptigi icin saniyeler suruyordu (olculdu 2.1 sn)
+    for uc in ("/api/hazir", "/api/isler"):
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:%d%s" % (port, uc), timeout=1.5):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def bos_port(baslangic: int = 8788) -> int:
@@ -80,8 +83,8 @@ def main() -> int:
         subprocess.Popen(cmd, cwd=ROOT, creationflags=PENCERESIZ,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
-        for _ in range(40):                            # ayaga kalkmasini bekle
-            time.sleep(0.25)
+        for _ in range(120):                           # ayaga kalkmasini bekle
+            time.sleep(0.08)
             if ayakta(port):
                 break
     url = "http://127.0.0.1:%d" % port

@@ -97,7 +97,22 @@ def _ekleri_kaydet(ekler: list, hedef_dir: str, yalniz_metin: bool) -> tuple:
     return yollar, red
 
 
+_SISTEM_ONBELLEK = {"veri": {"model": "", "yuklu_gb": 0, "vram": [0, 0], "gpu": 0}, "t": 0.0}
+
+
 def _sistem() -> dict:
+    """Onbellekli: /api/isler her cagrida nvidia-smi + ollama yokluyordu -> 2.1 sn gecikme
+    (olculdu; panel acilisi bu yuzden geciyordu). Artik 3 sn'lik onbellek, tazeleme AYRI
+    is parcaciginda - istek asla beklemez."""
+    simdi = time.time()
+    if simdi - _SISTEM_ONBELLEK["t"] > 3:
+        _SISTEM_ONBELLEK["t"] = simdi
+        threading.Thread(target=lambda: _SISTEM_ONBELLEK.update(veri=_sistem_olc()),
+                         daemon=True).start()
+    return _SISTEM_ONBELLEK["veri"]
+
+
+def _sistem_olc() -> dict:
     out = {"model": "", "yuklu_gb": 0, "vram": [0, 0], "gpu": 0}
     try:
         import urllib.request
@@ -588,6 +603,8 @@ class Istek(BaseHTTPRequestHandler):
             if yol.path == "/":
                 with open(SAYFA, encoding="utf-8") as f:
                     self._gonder(f.read(), "text/html; charset=utf-8")
+            elif yol.path == "/api/hazir":
+                self._gonder({"hazir": True})       # baslatici bunu yoklar (anlik)
             elif yol.path == "/api/isler":
                 self._gonder({"isler": _is_listesi(), "sistem": _sistem()})
             elif yol.path == "/api/olaylar":

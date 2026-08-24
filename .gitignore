@@ -13,3 +13,10 @@ build/
 dist/
 *.spec
 test_webapp/
+pencere_testi/
+panel_demo*/
+ui_test/
+seyret*/
+kesik_testi/
+izle_e2e*/
+canli_daktilo*/
