@@ -1,39 +1,40 @@
-"""Apprentice Izleyici - masaustu canli izleme (web arayuzu DEGIL; tkinter, bagimliliksiz).
+"""Apprentice Izleyici - masaustu canli izleme (tkinter, bagimliliksiz).
 
     python izle.py                    # ~/.apprentice icindeki isleri izler
     python izle.py --home <klasor>    # baska ev (or. .apprentice_test_home)
 
-Sunucuya baglanmaz; iscinin yazdigi is klasorunu okur (job.json + events.jsonl) - bu yuzden
-hangi istemci baslatmis olursa olsun (Claude Code, Cursor, olcum betigi) her is gorunur.
-Paneller: is listesi / canli olay akisi (arac cagrilari, yazimlar, hatalar) / is ozeti
-(durum, tur, token, uyarilar: duragan-ruff-butce-hafiza) / son yazilan dosya onizleme.
-Ust satirda sistem durumu: yuklu model (ollama ps) + VRAM (nvidia-smi), 3 sn'de bir.
+Sunucuya baglanmaz; is klasorunu okur (job.json + events.jsonl + canli.txt) - hangi istemci
+baslatmis olursa olsun her is gorunur. v3 (kullanici geri bildirimiyle):
+  - Asama kutulari TIKLANABILIR FILTRE: BASLANGIC (gorev+baglam) / URETIM (arac+kod) /
+    DOGRULAMA (kanit+sonuc) / ONARIM (geri gonderim+duzeltme) / USTA (rapor). TUMU = hepsi.
+  - Kod bloklari sozdizimi renklendirmeli (Python + C#), akisin icinde.
+  - Canli daktilo (canli=true kipinde): uretim hafif gecikmeli, KADEMELI damla akisiyla
+    surekli akar - parca parca sicrama yok. Panolar dikey surukleyerek boyutlanir.
 """
 from __future__ import annotations
-import argparse, json, os, subprocess, sys, time
+import argparse, json, os, re, subprocess, sys, time
 
 # ------------------------------------------------------------------ veri katmani (GUI'siz test edilir)
 
 
 class IsDeposu:
-    """Is klasorunu artimli okur: events.jsonl'da yalnizca yeni satirlar islenir."""
+    """Is klasorunu artimli okur: events.jsonl'da yalnizca yeni satirlar islenir.
+    Her olaya islenirken _asama etiketi vurulur (filtreleme icin)."""
 
     def __init__(self, home: str):
         self.home = os.path.expanduser(home)
         self.jobs_dir = os.path.join(self.home, "jobs")
-        self.durumlar: dict = {}          # jid -> ozet
-        self.olaylar: dict = {}           # jid -> [olay]
-        self._ofset: dict = {}            # jid -> okunan bayt
+        self.durumlar: dict = {}
+        self.olaylar: dict = {}
+        self._ofset: dict = {}
 
     def is_listesi(self) -> list:
         if not os.path.isdir(self.jobs_dir):
             return []
-        adlar = [a for a in os.listdir(self.jobs_dir)
-                 if os.path.isdir(os.path.join(self.jobs_dir, a))]
-        return sorted(adlar, reverse=True)
+        return sorted((a for a in os.listdir(self.jobs_dir)
+                       if os.path.isdir(os.path.join(self.jobs_dir, a))), reverse=True)
 
     def tazele(self, jid: str) -> bool:
-        """Yeni olay varsa isler, True doner."""
         p = os.path.join(self.jobs_dir, jid, "events.jsonl")
         try:
             boyut = os.path.getsize(p)
@@ -64,8 +65,8 @@ class IsDeposu:
             self.durumlar[jid] = self._is_bilgisi(jid)
             self.olaylar[jid] = []
         self.durumlar[jid]["son_olay_t"] = mtime
-        self.olaylar[jid].extend(yeni)
         self._ozeti_isle(jid, yeni)
+        self.olaylar[jid].extend(yeni)
         if yeni:
             self.durumlar[jid]["son_olay"] = olay_satiri(yeni[-1])[1][:60]
         self._sure_guncelle(jid)
@@ -90,16 +91,18 @@ class IsDeposu:
         for e in yeni:
             t = e.get("type")
             if t == "baglam":
-                s["asama"] = "uretim"
+                s["asama"] = "baslama"
                 s["baglam"] = {k: e.get(k) for k in ("sistem", "hafiza", "durum", "harita")}
                 s["baglam"]["araclar"] = e.get("araclar") or []
             elif t == "tool":
                 s["sayac"]["arac"] += 1
-                s["asama"] = "uretim"
-            elif t == "tool_result" and e.get("name") == "write_file":
-                k = kanit_coz(e.get("text") or "")
-                if k:
-                    s["sayac"][k["sayac"]] = s["sayac"].get(k["sayac"], 0) + 1
+                if s["asama"] not in ("onarim",):          # onarimdaki araclar onarima aittir
+                    s["asama"] = "uretim"
+            elif t == "tool_result":
+                if e.get("name") == "write_file":
+                    k = kanit_coz(e.get("text") or "")
+                    if k:
+                        s["sayac"][k["sayac"]] = s["sayac"].get(k["sayac"], 0) + 1
             elif t == "onarim":
                 s["sayac"]["onarim"] = max(s["sayac"]["onarim"], int(e.get("tur", 0)))
                 s["asama"] = "onarim"
@@ -126,9 +129,8 @@ class IsDeposu:
                 for alan, etiket in (("duragan", "DURAGANLIK: isci ilerleyemiyor, usta gerekli"),
                                      ("butce_uyarisi", None), ("hafiza_uyarisi", None),
                                      ("durum_uyarisi", None)):
-                    v = e.get(alan)
-                    if v:
-                        s["uyarilar"].append(etiket or str(v))
+                    if e.get(alan):
+                        s["uyarilar"].append(etiket or str(e[alan]))
                 if e.get("ruff"):
                     s["uyarilar"].extend("ruff: " + str(u) for u in e["ruff"][:4])
             elif t == "error":
@@ -136,6 +138,21 @@ class IsDeposu:
                 s["derleme"] = "calistirilamadi"
             elif t == "exit":
                 s["durum"] = "bitti"
+            # filtreleme icin: sonuc/kanit olaylari dogrulamaya, digerleri o anki asamaya
+            if t == "result":
+                e["_asama"] = "dogrulama"
+            elif t == "tool_result" and e.get("name") == "write_file" and kanit_coz(e.get("text") or ""):
+                e["_asama"] = "dogrulama"
+            elif t in ("system", "baglam"):
+                e["_asama"] = "baslama"
+            elif t in ("onarim", "duraganlik"):
+                e["_asama"] = "onarim"
+            elif t == "usta_rapor":
+                e["_asama"] = "usta"
+            elif t == "exit":
+                e["_asama"] = "usta"
+            else:
+                e["_asama"] = s["asama"] if s["asama"] != "duraganlik" else "onarim"
 
     def _sure_guncelle(self, jid: str):
         s = self.durumlar.get(jid)
@@ -169,14 +186,11 @@ def kanit_coz(metin: str) -> dict | None:
             "etiket": "hata" if hatali else "yazim", "metin": "KANIT     " + " | ".join(parca)}
 
 
-KOD_SATIR_SINIRI = 100      # akista dosya basina gosterilen kod satiri
+KOD_SATIR_SINIRI = 100
 
 
 def olay_satirlari(e: dict) -> list:
-    """Bir olayi akis satirlarina acar. YAZILAN KODUN KENDISI de akisa girer:
-    kullanici geri bildirimi (2026-08-24) - 'nerede kod yazdi, hangi kodu yazdi
-    anlamiyorum'. Kod, yazim aninda basligiyla blok halinde dokulur; daktilo
-    kuyrugu bunlari satir satir ekrana akitir."""
+    """Bir olayi akis satirlarina acar; yazilan kod basligiyla blok halinde akisa girer."""
     et, metin = olay_satiri(e)
     out = [(et, metin)]
     if e.get("type") == "write":
@@ -190,12 +204,11 @@ def olay_satirlari(e: dict) -> list:
                         (len(icerik) - KOD_SATIR_SINIRI)))
         out.append(("bilgi", "─" * 48))
     elif e.get("type") in ("result", "usta_rapor", "onarim", "duraganlik", "baglam"):
-        out = [("bilgi", ""), (et, metin)]        # onemli olaylardan once bosluk: okunurluk
+        out = [("bilgi", ""), (et, metin)]
     return out
 
 
 def olay_satiri(e: dict) -> tuple:
-    """(etiket, metin) - GUI renk siniflari: arac / yazim / hata / sonuc / bilgi."""
     t = e.get("type")
     if t == "tool":
         det = e.get("detail") or json.dumps(e.get("args") or {}, ensure_ascii=False)[:80]
@@ -212,7 +225,7 @@ def olay_satiri(e: dict) -> tuple:
             e.get("sistem"), e.get("hafiza") or "-", e.get("durum") or "-",
             e.get("harita") or "-", ",".join(e.get("araclar") or [])))
     if t == "onarim":
-        return "arac", "ONARIM TUR %s -> isciye geri bildirim: %s" % (
+        return "arac", "GERI GONDERIM (onarim turu %s) -> isciye: %s" % (
             e.get("tur"), str(e.get("mesaj", ""))[:160].replace("\n", " | "))
     if t == "duraganlik":
         return "hata", "DURAGANLIK: ayni hata imzasi degismiyor - isci kesildi, USTAYA devir"
@@ -239,6 +252,30 @@ def olay_satiri(e: dict) -> tuple:
     return "bilgi", str(e)[:120]
 
 
+# ------------------------------------------------------------------ sozdizimi renklendirme
+_KW = (r"\b(def|class|if|elif|else|for|while|return|import|from|raise|try|except|finally|"
+       r"with|as|in|not|and|or|is|None|True|False|lambda|pass|break|continue|yield|self|"
+       r"public|private|protected|static|void|var|new|using|namespace|int|float|string|bool|"
+       r"foreach|null|this|override|virtual)\b")
+_RENK_DESEN = re.compile(
+    r"(?P<yorum>#[^\n]*|//[^\n]*)|(?P<metin>\"[^\"\n]*\"?|'[^'\n]*'?)|"
+    r"(?P<kw>%s)|(?P<sayi>\b\d[\d_.]*\b)" % _KW)
+
+
+def renkle(satir: str) -> list:
+    """Kod satirini [(etiket, parca)] boler: kw / metin / yorum / sayi / kod."""
+    out = []
+    son = 0
+    for m in _RENK_DESEN.finditer(satir):
+        if m.start() > son:
+            out.append(("kod", satir[son:m.start()]))
+        out.append((m.lastgroup, m.group()))
+        son = m.end()
+    if son < len(satir):
+        out.append(("kod", satir[son:]))
+    return out or [("kod", satir)]
+
+
 def sistem_satiri() -> str:
     parcalar = []
     try:
@@ -263,8 +300,11 @@ def sistem_satiri() -> str:
 T = {"bg": "#1f1d1a", "panel": "#2a2724", "panel2": "#33302c", "cizgi": "#3f3b36",
      "metin": "#f1ede6", "soluk": "#a39d94", "vurgu": "#d97757",
      "arac": "#e0b345", "yazim": "#7fbf6f", "hata": "#e06c5f", "sonuc": "#7fb4d9",
-     "kod": "#c8d8b0"}
+     "kod": "#c8d8b0", "kw": "#7fb4d9", "metin_s": "#e0b345", "yorum": "#8a9a7a",
+     "sayi": "#d0a0d0"}
 FONT = "Segoe UI"
+FILTRELER = [("tumu", "TUMU"), ("baslama", "BASLANGIC"), ("uretim", "URETIM"),
+             ("dogrulama", "DOGRULAMA"), ("onarim", "ONARIM"), ("usta", "USTA RAPORU")]
 
 
 def gui(home: str):
@@ -274,7 +314,7 @@ def gui(home: str):
     depo = IsDeposu(home)
     kok = tk.Tk()
     kok.title("Apprentice Izleyici")
-    kok.geometry("1240x760")
+    kok.geometry("1360x820")
     kok.configure(bg=T["bg"])
     st = ttk.Style(kok); st.theme_use("clam")
     st.configure(".", background=T["bg"], foreground=T["metin"], font=(FONT, 10),
@@ -282,7 +322,7 @@ def gui(home: str):
     st.configure("TCheckbutton", background=T["bg"], foreground=T["soluk"])
     st.map("TCheckbutton", background=[("active", T["bg"])])
 
-    ust = tk.Frame(kok, bg=T["bg"]); ust.pack(fill="x", padx=10, pady=(8, 4))
+    ust = tk.Frame(kok, bg=T["bg"]); ust.pack(fill="x", padx=10, pady=(8, 2))
     tk.Label(ust, text="Apprentice Izleyici", bg=T["bg"], fg=T["metin"],
              font=(FONT, 15, "bold")).pack(side="left")
     sistem_lbl = tk.Label(ust, text="", bg=T["bg"], fg=T["soluk"], font=(FONT, 9))
@@ -298,80 +338,124 @@ def gui(home: str):
         anchor="w", padx=8, pady=(6, 2))
     takip = tk.BooleanVar(value=True)
     ttk.Checkbutton(sol, text="en yeniyi takip et", variable=takip).pack(anchor="w", padx=8)
-    liste = tk.Listbox(sol, width=34, height=32, bg=T["panel2"], fg=T["metin"],
+    liste = tk.Listbox(sol, width=32, height=34, bg=T["panel2"], fg=T["metin"],
                        selectbackground=T["vurgu"], selectforeground="#ffffff",
                        borderwidth=0, highlightthickness=0, font=("Consolas", 9))
     liste.pack(fill="y", expand=True, padx=8, pady=6)
 
-    # orta: asama seridi + olay akisi
+    # orta: filtre kutulari + (dikey bolunmus) akis + daktilo
     orta = tk.Frame(govde, bg=T["bg"]); orta.pack(side="left", fill="both", expand=True, padx=(8, 8))
     serit = tk.Frame(orta, bg=T["bg"]); serit.pack(fill="x", pady=(0, 4))
-    ASAMALAR = [("baslama", "BASLADI"), ("uretim", "URETIM"), ("dogrulama", "DOGRULAMA"),
-                ("onarim", "ONARIM"), ("duraganlik", "DURAGANLIK"), ("usta", "USTA RAPORU")]
-    asama_kutulari = {}
-    for ad, etiket in ASAMALAR:
-        k = tk.Label(serit, text=etiket, bg=T["panel2"], fg=T["soluk"],
-                     font=(FONT, 8, "bold"), padx=8, pady=3)
-        k.pack(side="left", padx=(0, 4))
-        asama_kutulari[ad] = k
+    kutular = {}
+    durum = {"secili": None, "gosterilen": 0, "sistem_t": 0.0, "filtre": "tumu",
+             "canli_metin": "", "canli_ciz": 0}
+
     canli_lbl = tk.Label(orta, text="", bg=T["bg"], fg=T["arac"], font=(FONT, 10, "bold"),
                          anchor="w")
     canli_lbl.pack(fill="x", pady=(0, 2))
-    # CANLI DAKTILO: canli kipte (worker_run(canli=true)) uretim token token canli.txt'ye
-    # akar; bu pano onu oldugu gibi gosterir - kod harf harf ekranda buyur.
-    daktilo_kutu = tk.Text(orta, bg="#242220", fg=T["kod"], borderwidth=0,
-                           highlightthickness=0, font=("Consolas", 9), wrap="word", height=12)
-    for adx in ("arac",):
-        daktilo_kutu.tag_configure(adx, foreground=T[adx])
-    daktilo_gorunur = [False]
-    tk.Label(orta, text="CANLI OLAY AKISI", bg=T["bg"], fg=T["soluk"],
-             font=(FONT, 9, "bold")).pack(anchor="w")
-    akis = tk.Text(orta, bg=T["panel"], fg=T["metin"], insertbackground=T["metin"],
+
+    pw = tk.PanedWindow(orta, orient="vertical", bg=T["cizgi"], sashwidth=5, borderwidth=0)
+    pw.pack(fill="both", expand=True)
+
+    akis_kap = tk.Frame(pw, bg=T["bg"])
+    tk.Label(akis_kap, text="CANLI OLAY AKISI  (asama kutusuna tiklayarak filtrele)",
+             bg=T["bg"], fg=T["soluk"], font=(FONT, 9, "bold")).pack(anchor="w")
+    akis = tk.Text(akis_kap, bg=T["panel"], fg=T["metin"], insertbackground=T["metin"],
                    borderwidth=0, highlightthickness=0, font=("Consolas", 9), wrap="word")
     akis.pack(fill="both", expand=True, pady=(2, 0))
-    for ad in ("arac", "yazim", "hata", "sonuc", "kod"):
+    for ad in ("arac", "yazim", "hata", "sonuc", "kod", "kw", "yorum", "sayi"):
         akis.tag_configure(ad, foreground=T[ad])
+    akis.tag_configure("metin_s", foreground=T["metin_s"])
     akis.tag_configure("bilgi", foreground=T["soluk"])
     akis.configure(state="disabled")
+    pw.add(akis_kap, minsize=160, stretch="always")
 
-    # DAKTILO KUYRUGU: olaylar (ozellikle kod bloklari) ekrana satir satir akar.
-    # Ollama kanal tek parca verir (olculdu); akis GOSTERIMDE uretilir - icerik gercek.
-    bekleyen: list = []
-
-    def daktilo():
-        if bekleyen:
-            akis.configure(state="normal")
-            hiz = 6 if bekleyen and bekleyen[0][0] == "kod" else 3
-            for _ in range(min(hiz, len(bekleyen))):
-                etiket, metin = bekleyen.pop(0)
-                akis.insert("end", metin + "\n", etiket)
-            akis.see("end")
-            akis.configure(state="disabled")
-        kok.after(50, daktilo)
+    dak_kap = tk.Frame(pw, bg=T["bg"])
+    tk.Label(dak_kap, text="MODEL SU AN YAZIYOR  (canli=true kipinde token akisi)",
+             bg=T["bg"], fg=T["arac"], font=(FONT, 9, "bold")).pack(anchor="w")
+    daktilo_kutu = tk.Text(dak_kap, bg="#242220", fg=T["kod"], borderwidth=0,
+                           highlightthickness=0, font=("Consolas", 9), wrap="word")
+    daktilo_kutu.pack(fill="both", expand=True, pady=(2, 0))
+    for ad in ("kw", "yorum", "sayi", "kod"):
+        daktilo_kutu.tag_configure(ad, foreground=T[ad])
+    daktilo_kutu.tag_configure("metin_s", foreground=T["metin_s"])
+    daktilo_gorunur = [False]
 
     # sag: ozet + son yazim
-    sag = tk.Frame(govde, bg=T["panel"], width=380); sag.pack(side="left", fill="y")
+    sag = tk.Frame(govde, bg=T["panel"], width=360); sag.pack(side="left", fill="y")
     sag.pack_propagate(False)
     tk.Label(sag, text="IS OZETI", bg=T["panel"], fg=T["soluk"], font=(FONT, 9, "bold")).pack(
         anchor="w", padx=8, pady=(6, 2))
     ozet_lbl = tk.Label(sag, text="-", bg=T["panel"], fg=T["metin"], justify="left",
-                        anchor="nw", wraplength=350, font=(FONT, 9))
+                        anchor="nw", wraplength=330, font=(FONT, 9))
     ozet_lbl.pack(fill="x", padx=8)
     tk.Label(sag, text="SON YAZILAN DOSYA", bg=T["panel"], fg=T["soluk"],
              font=(FONT, 9, "bold")).pack(anchor="w", padx=8, pady=(8, 2))
-    onizleme = tk.Text(sag, bg=T["panel2"], fg=T["metin"], borderwidth=0, highlightthickness=0,
-                       font=("Consolas", 8), wrap="none", height=22)
+    onizleme = tk.Text(sag, bg=T["panel2"], fg=T["kod"], borderwidth=0, highlightthickness=0,
+                       font=("Consolas", 8), wrap="none", height=20)
+    for ad in ("kw", "yorum", "sayi", "kod"):
+        onizleme.tag_configure(ad, foreground=T[ad])
+    onizleme.tag_configure("metin_s", foreground=T["metin_s"])
     onizleme.pack(fill="both", expand=True, padx=8, pady=(0, 8))
     onizleme.configure(state="disabled")
 
-    durum = {"secili": None, "gosterilen": 0, "sistem_t": 0.0}
+    bekleyen: list = []
+
+    def kod_ekle(widget, satir: str):
+        for et, parca in renkle(satir):
+            widget.insert("end", parca, "metin_s" if et == "metin" else (et or "kod"))
+        widget.insert("end", "\n")
+
+    def daktilo():
+        # akis kuyrugu: olaylar kademeli dokulur (adim adim his)
+        if bekleyen:
+            akis.configure(state="normal")
+            hiz = 4 if bekleyen[0][0] == "kod" else 2
+            for _ in range(min(hiz, len(bekleyen))):
+                etiket, metin = bekleyen.pop(0)
+                if etiket == "kod":
+                    akis.insert("end", "  ", "kod")
+                    kod_ekle(akis, metin.lstrip())
+                else:
+                    akis.insert("end", metin + "\n", etiket)
+            akis.see("end")
+            akis.configure(state="disabled")
+        # canli.txt damlasi: okunan metin ekrana KARAKTER KARAKTER akar (hafif gecikmeli)
+        hedef = durum["canli_metin"]
+        ciz = durum["canli_ciz"]
+        if ciz < len(hedef):
+            geri = len(hedef) - ciz
+            adim = 12 if geri < 900 else 80              # geride kalirsa hizlanir
+            parca = hedef[ciz:ciz + adim]
+            durum["canli_ciz"] = ciz + len(parca)
+            daktilo_kutu.configure(state="normal")
+            daktilo_kutu.insert("end", parca, "kod")
+            daktilo_kutu.see("end")
+            daktilo_kutu.configure(state="disabled")
+        kok.after(45, daktilo)
+
+    def filtre_sec(ad):
+        durum["filtre"] = ad
+        durum["gosterilen"] = 0
+        bekleyen.clear()
+        akis.configure(state="normal"); akis.delete("1.0", "end"); akis.configure(state="disabled")
+
+    for ad, etiket in FILTRELER:
+        k = tk.Label(serit, text=etiket, bg=T["panel2"], fg=T["soluk"],
+                     font=(FONT, 8, "bold"), padx=8, pady=3, cursor="hand2")
+        k.pack(side="left", padx=(0, 4))
+        k.bind("<Button-1>", lambda _e, a=ad: filtre_sec(a))
+        kutular[ad] = k
 
     def is_sec(jid: str):
         if durum["secili"] != jid:
             durum["secili"] = jid
             durum["gosterilen"] = 0
+            durum["canli_metin"] = ""; durum["canli_ciz"] = 0
             bekleyen.clear()
             akis.configure(state="normal"); akis.delete("1.0", "end"); akis.configure(state="disabled")
+            daktilo_kutu.configure(state="normal"); daktilo_kutu.delete("1.0", "end")
+            daktilo_kutu.configure(state="disabled")
 
     def tikla(_e=None):
         sec = liste.curselection()
@@ -380,13 +464,15 @@ def gui(home: str):
             is_sec(liste.get(sec[0]).split()[0])
     liste.bind("<<ListboxSelect>>", tikla)
 
+    def gecen(e: dict) -> bool:
+        return durum["filtre"] == "tumu" or e.get("_asama") == durum["filtre"]
+
     def guncelle():
         adlar = depo.is_listesi()[:60]
-        for jid in adlar[:8]:                          # en yeni birkaci canli tazelenir
+        for jid in adlar[:8]:
             depo.tazele(jid)
         if durum["secili"] and durum["secili"] not in depo.olaylar:
-            depo.tazele(durum["secili"])               # eski ise tiklandi: onu da yukle
-        # liste
+            depo.tazele(durum["secili"])
         secili_gorunum = liste.curselection()
         liste.delete(0, "end")
         for i, jid in enumerate(adlar):
@@ -394,28 +480,26 @@ def gui(home: str):
             liste.insert("end", "%s  %-5s %s" % (jid, s.get("ortam", "?"),
                                                  s.get("durum", "?") if s else "?"))
             renk = T["yazim"] if s.get("durum") == "bitti" and s.get("derleme") == "derlendi" \
-                else (T["hata"] if s.get("derleme") in ("hata", "calistirilamadi")
-                      else T["arac"])
+                else (T["hata"] if s.get("derleme") in ("hata", "calistirilamadi") else T["arac"])
             liste.itemconfig(i, foreground=renk)
         if takip.get() and adlar:
             is_sec(adlar[0])
         if secili_gorunum and not takip.get():
             liste.selection_set(secili_gorunum[0])
-        # akis + ozet
+
         jid = durum["secili"]
         if jid and jid in depo.olaylar:
+            s = depo.durumlar[jid]
             olaylar = depo.olaylar[jid]
+            if durum["gosterilen"] == 0 and durum["filtre"] in ("tumu", "baslama") and s["gorev"]:
+                bekleyen.append(("sonuc", "GOREV (ustadan): " + s["gorev"][:400]))
             if durum["gosterilen"] < len(olaylar):
                 for e in olaylar[durum["gosterilen"]:]:
-                    bekleyen.extend(olay_satirlari(e))
+                    if gecen(e):
+                        bekleyen.extend(olay_satirlari(e))
                 durum["gosterilen"] = len(olaylar)
-            s = depo.durumlar[jid]
-            # asama seridi: gecilen asamalar soluk-vurgulu, aktif olan turuncu
-            aktif = s.get("asama", "baslama")
-            # CANLI URETIM nabzi: is kosuyor + son olaydan beri >2 s sessizlik = model uretiyor
-            # (Olculdu: Ollama arac-cagrisi argumanlarini AKITMIYOR - 44 s uretim tek parca
-            # geldi. Token daktilosu bu kanalda imkansiz; nabiz + anez-aninda-gosterim en durustu.)
-            # canli daktilo panosu: canli.txt doluysa goster, degilse gizle
+            # canli.txt: hedef metni oku; daktilo dongusu damlatir. Tur bitiminde dosya
+            # bosalir -> pano temizlenir.
             canli_txt = ""
             if s["durum"] == "calisiyor":
                 try:
@@ -424,40 +508,43 @@ def gui(home: str):
                         canli_txt = f.read()
                 except OSError:
                     pass
-            if canli_txt.strip():
-                if not daktilo_gorunur[0]:
-                    daktilo_kutu.pack(fill="x", pady=(0, 4), before=akis)
-                    daktilo_gorunur[0] = True
-                daktilo_kutu.configure(state="normal")
-                daktilo_kutu.delete("1.0", "end")
-                daktilo_kutu.insert("end", "MODEL SU AN YAZIYOR:\n", "arac")
-                daktilo_kutu.insert("end", canli_txt[-3000:])
-                daktilo_kutu.see("end")
+            if canli_txt and not canli_txt.startswith(durum["canli_metin"][:200]):
+                durum["canli_metin"] = canli_txt          # yeni tur: bastan
+                durum["canli_ciz"] = 0
+                daktilo_kutu.configure(state="normal"); daktilo_kutu.delete("1.0", "end")
                 daktilo_kutu.configure(state="disabled")
-            elif daktilo_gorunur[0]:
-                daktilo_kutu.pack_forget()
+            elif canli_txt:
+                durum["canli_metin"] = canli_txt
+            elif not canli_txt and durum["canli_metin"] and s["durum"] != "calisiyor":
+                durum["canli_metin"] = ""; durum["canli_ciz"] = 0
+            if canli_txt and not daktilo_gorunur[0]:
+                pw.add(dak_kap, minsize=120, stretch="always")
+                daktilo_gorunur[0] = True
+            elif not canli_txt and daktilo_gorunur[0] and s["durum"] != "calisiyor":
+                pw.forget(dak_kap)
                 daktilo_gorunur[0] = False
-            if s["durum"] == "calisiyor" and s.get("son_olay_t"):
-                sessiz = time.time() - s["son_olay_t"]
-                if sessiz > 2:
-                    yanip = "..." if int(time.time() * 2) % 2 else "   "
-                    canli_lbl.configure(
-                        text="MODEL URETIYOR%s  %d sn  (son: %s)" % (yanip, sessiz,
-                                                                     s.get("son_olay") or "-"),
-                        fg=T["arac"])
-                else:
-                    canli_lbl.configure(text="olay isleniyor...", fg=T["yazim"])
-            else:
-                canli_lbl.configure(text="", fg=T["soluk"])
-            for ad, _ in ASAMALAR:
-                k = asama_kutulari[ad]
+
+            aktif = s.get("asama", "baslama")
+            for ad, _e in FILTRELER:
+                k = kutular[ad]
+                secili_f = durum["filtre"] == ad
                 if ad == aktif:
                     k.configure(bg=T["vurgu"], fg="#ffffff")
-                elif ad in ("duraganlik",) and not any(u.startswith("DURAGANLIK")
-                                                       for u in map(str, s["uyarilar"])):
-                    k.configure(bg=T["panel2"], fg=T["cizgi"])       # hic yasanmadiysa iyice soluk
+                elif secili_f:
+                    k.configure(bg=T["cizgi"], fg=T["metin"])
                 else:
                     k.configure(bg=T["panel2"], fg=T["soluk"])
+            if s["durum"] == "calisiyor" and s.get("son_olay_t"):
+                sessiz = time.time() - s["son_olay_t"]
+                if sessiz > 2 and not canli_txt:
+                    yanip = "..." if int(time.time() * 2) % 2 else "   "
+                    canli_lbl.configure(text="MODEL URETIYOR%s  %d sn  (son: %s)" % (
+                        yanip, sessiz, s.get("son_olay") or "-"), fg=T["arac"])
+                else:
+                    canli_lbl.configure(text="", fg=T["soluk"])
+            else:
+                canli_lbl.configure(text="", fg=T["soluk"])
+
             ku = s.get("kullanim") or {}
             b = s.get("baglam") or {}
             sy = s.get("sayac") or {}
@@ -470,25 +557,22 @@ def gui(home: str):
                         "baglam: sistem %s kr, hafiza %s, STATE %s, harita %s" % (
                             b.get("sistem", "-"), b.get("hafiza") or "-",
                             b.get("durum") or "-", b.get("harita") or "-"),
-                        "araclar: " + (",".join(b.get("araclar") or []) or "-"),
                         "sayac: %d arac, %d yazim, %d no-op, %d izin reddi, %d kanit hatasi, %d onarim" % (
                             sy.get("arac", 0), sy.get("yazim", 0), sy.get("noop", 0),
-                            sy.get("izin_red", 0), sy.get("kanit_hata", 0), sy.get("onarim", 0)),
-                        "gorev: " + (s["gorev"][:200] + ("..." if len(s["gorev"]) > 200 else ""))]
-            for u in s["uyarilar"][:5]:
-                satirlar.append("UYARI: " + str(u)[:120])
-            for h in s["hatalar"][:3]:
-                satirlar.append("HATA: " + str(h)[:120])
+                            sy.get("izin_red", 0), sy.get("kanit_hata", 0), sy.get("onarim", 0))]
+            for u in s["uyarilar"][:4]:
+                satirlar.append("UYARI: " + str(u)[:110])
+            for h in s["hatalar"][:2]:
+                satirlar.append("HATA: " + str(h)[:110])
             ozet_lbl.configure(text="\n".join(satirlar))
             y = s.get("son_yazim")
             if y:
                 onizleme.configure(state="normal")
                 onizleme.delete("1.0", "end")
-                icerik = y["icerik"]
-                onizleme.insert("end", "# %s\n" % y["path"] +
-                                "\n".join(icerik.splitlines()[:120]))
+                onizleme.insert("end", "# %s\n" % y["path"], "yorum")
+                for satir in y["icerik"].splitlines()[:120]:
+                    kod_ekle(onizleme, satir)
                 onizleme.configure(state="disabled")
-        # sistem satiri (3 sn'de bir)
         if time.time() - durum["sistem_t"] > 3:
             durum["sistem_t"] = time.time()
             sistem_lbl.configure(text=sistem_satiri())
