@@ -23,8 +23,9 @@ T = {"bg": "#1f1d1a", "panel": "#2a2724", "panel2": "#33302c", "cizgi": "#3f3b36
      "metin": "#f1ede6", "soluk": "#a39d94", "vurgu": "#d97757", "vurgu2": "#e8956f",
      "ok": "#6fc28a", "hata": "#ee6b5b", "uyari": "#e9b85c"}
 FONT = "Segoe UI" if os.name == "nt" else "Helvetica"
+T2 = T   # tani modulu de T adini kullaniyor; pencere kodunda karismasin
 
-ADIMLAR = [("dosyalar", "Apprentice dosyaları"), ("python", "Python"), ("ollama", "Ollama"),
+ADIMLAR = [("tani", "Ortam tanısı"), ("dosyalar", "Apprentice dosyaları"), ("python", "Python"), ("ollama", "Ollama"),
            ("model", "Yerel model (Qwen3-Coder-Next, ~20 GB)"), ("ide", "IDE bağlantıları"),
            ("cli", "Ajan CLI'ları"), ("kisayol", "Panel kısayolu"), ("test", "Öz-test")]
 
@@ -188,6 +189,7 @@ class Sihirbaz(tk.Tk):
         self.btn_ollama = ttk.Button(alt, text="Ollama'yı indir", command=lambda: webbrowser.open("https://ollama.com/download"))
         self.btn_kural = ttk.Button(alt, text="Bir projeye bağla…", command=self._kural)
         self.btn_kural.pack(side="left")
+        ttk.Button(alt, text="Tanı", command=self._tani).pack(side="left", padx=(8, 0))
         self.btn_panel = ttk.Button(alt, text="Paneli aç", command=self._panel)
         self.btn_panel.pack(side="left", padx=(8, 0))
         ttk.Label(alt, text="Proje klasörüne AGENTS.md + .cursor/rules/apprentice.mdc yazar; IDE o projede\n"
@@ -262,6 +264,8 @@ class Sihirbaz(tk.Tk):
     def _kur(self, kok: str):
         sonuc = {}
         try:
+            self.adim_durum("tani", "calisiyor")
+            self.ilerle(None, "Ortam taranıyor…")
             self.adim_durum("dosyalar", "calisiyor")
             self.ilerle(None, "Dosyalar açılıyor…")
             ok = dosyalari_ac(kok, self.log)
@@ -277,6 +281,19 @@ class Sihirbaz(tk.Tk):
             kur.log = self.log
             kur.ilerleme = self.ilerle
             kur.DEGISTIR = True
+            try:
+                rapor = kur.tani_calistir()
+                sonuc["tani"] = rapor.get("durum") != "hata"
+                self.adim_durum("tani", {"ok": "ok", "uyari": "uyari",
+                                         "hata": "hata"}[rapor.get("durum", "uyari")])
+                self._tani_raporu = rapor
+                if rapor.get("durum") == "hata":
+                    self.log("[X]   Ortam eksik - ayrıntı için 'Tanı' düğmesine bas.")
+                kur.model_sec_donanima_gore(rapor)
+            except Exception as e:  # noqa: BLE001
+                self.log("[!]   tanı çalıştırılamadı: %s" % str(e)[:150])
+                sonuc["tani"] = True
+                self.adim_durum("tani", "uyari")
 
             def calistir(k, fn):
                 self.adim_durum(k, "calisiyor")
@@ -423,6 +440,61 @@ class Sihirbaz(tk.Tk):
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Apprentice",
                                  "Giriş başlatılamadı: %s\n\nElle: claude auth login" % e)
+
+    def _tani(self):
+        """Ortam tanisi penceresi: eksik ne, NE YAPMALI. Kurulum patlarsa kullanicinin
+        ilk basvuracagi yer burasi - komut satiri bilmeden sebebi gorur."""
+        kok = self.kok_var.get().strip()
+        try:
+            kur = sys.modules.get("kur")
+            if kur is None:
+                sys.path.insert(0, kok)
+                import importlib
+                kur = importlib.import_module("kur")
+            kur.set_root(kok if os.path.isfile(os.path.join(kok, "kur.py")) else BURASI)
+            sys.path.insert(0, kur.ROOT)
+            from core import tani as T
+            r = T.tani(kurulum_dizini=kur.ROOT, url=kur.ollama_url())
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Tanı", "Tanı çalıştırılamadı: %s" % str(e)[:200])
+            return
+        w = tk.Toplevel(self); w.title("Apprentice — ortam tanısı")
+        w.configure(bg=T2["bg"]); w.geometry("820x620"); w.transient(self)
+        renk = {"ok": T2["ok"], "uyari": T2["uyari"], "hata": T2["hata"]}
+        basliklar = {"ok": "✓ Her şey hazır", "uyari": "! Çalışır — uyarılara bak",
+                     "hata": "✕ Önce şunları çöz"}
+        ttk.Label(w, text=basliklar.get(r["durum"], "?"), style="Baslik.TLabel").pack(
+            anchor="w", padx=22, pady=(18, 2))
+        m = r["makine"]
+        ttk.Label(w, text="%s · RAM %.0f GB · VRAM %.0f GB" % (m["os"], m["ram_gb"], m["vram_gb"]),
+                  style="Alt.TLabel").pack(anchor="w", padx=22, pady=(0, 10))
+        kut = tk.Text(w, bg=T2["panel"], fg=T2["metin"], relief="flat", wrap="word",
+                      font=(FONT, 10), padx=14, pady=12, borderwidth=0)
+        kut.pack(fill="both", expand=True, padx=18)
+        for d, c in renk.items():
+            kut.tag_configure(d, foreground=c)
+        kut.tag_configure("cozum", foreground=T2["soluk"], lmargin1=26, lmargin2=26)
+        for k in r["kontroller"]:
+            kut.insert("end", {"ok": "✓  ", "uyari": "!  ", "hata": "✕  "}[k["durum"]] +
+                       k["mesaj"] + "\n", k["durum"])
+            if k["cozum"] and k["durum"] != "ok":
+                kut.insert("end", "→ " + k["cozum"] + "\n", "cozum")
+            kut.insert("end", "\n")
+        o = r.get("oneri") or {}
+        if o:
+            kut.insert("end", "Bu makine için önerilen model: %s (~%d GB) — %s\n"
+                       % (o.get("kisa", "?"), o.get("gb", 0), o.get("not", "")), "ok")
+        kut.configure(state="disabled")
+        alt = ttk.Frame(w, padding=(18, 12)); alt.pack(fill="x")
+        ttk.Button(alt, text="Ollama'yı indir",
+                   command=lambda: webbrowser.open("https://ollama.com/download")).pack(side="left")
+        ttk.Button(alt, text="Panoya kopyala", command=lambda: (
+            self.clipboard_clear(), self.clipboard_append(kut.get("1.0", "end")),
+            messagebox.showinfo("Tanı", "Rapor panoya kopyalandı."))).pack(side="left", padx=8)
+        ttk.Button(alt, text="Yeniden çalıştır",
+                   command=lambda: (w.destroy(), self._tani())).pack(side="left")
+        ttk.Button(alt, text="Kapat", command=w.destroy).pack(side="right")
+
 
     def _panel(self):
         """Web panelini baslat + tarayiciyi ac (konsolsuz)."""

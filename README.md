@@ -61,3 +61,60 @@ Kanıtlar ve deneyler: [apprentice-lab](https://github.com/malikkayaalp/apprenti
 git remote add cekirdek https://github.com/malikkayaalp/apprentice.git   # bir kez
 git fetch cekirdek main && git merge cekirdek/main
 ```
+
+## Bir şey çalışmıyorsa: önce TANI
+
+Kurulum takıldıysa, panel açılmadıysa ya da çırak koşmuyorsa tahmin etmeyin — sistem size
+tam olarak neyin eksik olduğunu ve ne yapmanız gerektiğini söyler:
+
+```
+python kur.py --tani
+```
+
+Kurulum penceresindeki **Tanı** düğmesi aynı raporu verir (panoya kopyalanabilir).
+Panelde de `/api/tani` ucundan alınabilir.
+
+Tanının kapsadığı gerçek durumlar:
+
+| Durum | Ne olur |
+|---|---|
+| Ollama kurulu değil | İndirme bağlantısı verilir; kurulum durur (yarım kurulum bırakmaz) |
+| Ollama kurulu ama PATH'te değil | Bulunduğu yer gösterilir, kurulum yine de çalışır |
+| Ollama çalışmıyor | Kurulum başlatmayı dener; elle komut da söylenir |
+| 11434 portunu başka program tutuyor | Ayrı port + `ollama.url` ayarı anlatılır |
+| Model indirilmemiş | `ollama pull ...` komutu; makinede benzer model varsa listelenir |
+| Model klasörü başka diske taşınmış (`OLLAMA_MODELS`) | O diskin boş alanı ölçülür, yetmezse söylenir |
+| Disk dolu | Kaç GB gerektiği ve modeli başka diske taşıma yolu |
+| RAM/VRAM yetersiz | **Makineye uygun model otomatik seçilir** (aşağıya bakın) |
+| Kurulum klasörüne yazılamıyor | Başka klasör önerilir (Program Files gibi korumalı yerleri seçmeyin) |
+| İnternet/proxy yok | Mevcut modelle çalışmaya devam edilir; `HTTPS_PROXY` hatırlatılır |
+| Python eski | 3.10+ gerekir; Windows'ta Setup gömülü Python indirir |
+| Panel portu (8788) dolu | Panel bir sonraki boş portu kendiliğinden kullanır |
+
+### Donanıma göre model
+
+Varsayılan model (Qwen3-Coder-Next 80B Q4, ~47 GB) güçlü makineler içindir. Kurulum
+RAM'inizi ölçer ve kaldıramayacağınız bir modeli indirmeye **kalkışmaz**; onun yerine
+uygun olanı seçer:
+
+| RAM | Seçilen model | İndirme |
+|---|---|---|
+| 48 GB+ | Qwen3-Coder-Next 80B Q4 | ~47 GB |
+| 24–48 GB | Qwen2.5-Coder 32B | ~20 GB |
+| 12–24 GB | Qwen2.5-Coder 14B | ~9 GB |
+| 12 GB altı | Qwen2.5-Coder 7B | ~5 GB |
+
+Farklı bir model kullanmak isterseniz panelin **ÇIRAK MODELİ** listesinden seçin; ayarlar
+(bağlam penceresi, düşünme kipi) modelin kartına göre kendiliğinden uyarlanır. GPU şart
+değildir — GPU yoksa CPU'da çalışır, yalnızca yavaştır.
+
+### Sık karşılaşılanlar
+
+- **"Kurulum bitti ama IDE'de apprentice görünmüyor"** — IDE'yi kapatıp açın; MCP listesini
+  yenileyin. Ayar dosyanızda yorum satırı varsa kurulum ona dokunmaz ve size söyler.
+- **"Panel açılmıyor"** — masaüstündeki *Apprentice Panel* kısayolu; açılmazsa hata penceresi
+  sebebi gösterir. Elle: `python panel_ac.py`
+- **"Claude ile konuşamıyorum"** — panelin USTA bölümü Claude Code CLI ister ve **ayrı giriş**
+  gerekir (Claude Desktop girişi CLI'ya geçmez): `claude auth login`. Çırak girişsiz çalışır.
+- **"Model yavaş"** — ilk çağrıda model belleğe yüklenir (30–60 sn). Paneldeki ▶ ile önceden
+  ısıtabilirsiniz.

@@ -1,6 +1,7 @@
 """Apprentice kurulum: tek betik, adim adim, bagimliliksiz.
 
     python kur.py                 # kontrol et, eksikleri tamamla (model indirme dahil), IDE'leri ayarla
+    python kur.py --tani          # ORTAM TANISI: eksik ne, ne yapmali (hicbir sey degistirmez)
     python kur.py --kontrol       # yalnizca durumu goster, hicbir sey degistirme
     python kur.py --ide cursor,vscode   # yalnizca bu IDE'leri ayarla (cursor, vscode, windsurf, claude-desktop)
     python kur.py --olc           # + ilk calistirma num_batch olcumu (2-3 dk, GPU'ya ozel)
@@ -10,6 +11,7 @@ Windows'ta ayni betik Apprentice-Setup.exe olarak paketlenir (PyInstaller); Pyth
 gomulu Python'u (embeddable, ~11 MB) depoya indirir ve sunucu onunla calisir.
 
 Adimlar:
+  0  Ortam tanisi: donanim/disk/ag/Ollama/model - eksikse NE YAPMALI soylenir
   1  Python 3.10+ (yoksa gomulu Python indirilir - yalniz Windows)
   2  Ollama kurulu mu, calisiyor mu (degilse baslatmayi dener)
   3  Model var mi, yoksa indir (ilerleme yuzdesiyle)
@@ -827,6 +829,44 @@ def kural_yaz(proje: str) -> bool:
 
 
 # ------------------------------------------------------------------ main
+def tani_calistir(model_ad: str = "") -> dict:
+    """Ortam tanisi (core/tani.py): eksikleri ve NE YAPMALI'yi tek yerde toplar.
+    Kurulumun ILK adimidir - kullanici neyin neden calismadigini tahmin etmesin."""
+    try:
+        sys.path.insert(0, ROOT)
+        from core import tani as T
+    except Exception as e:  # noqa: BLE001
+        log(UYARI + "tani modulu yuklenemedi (%s) - kontroller atlaniyor" % str(e)[:80])
+        return {"durum": "uyari", "kontroller": [], "oneri": {}}
+    if not model_ad:
+        try:
+            model_ad = _cfg().env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
+        except Exception:
+            model_ad = ""
+    r = T.tani(model_ad=model_ad, kurulum_dizini=ROOT, url=ollama_url())
+    T.yazdir(r, log)
+    return r
+
+
+def model_sec_donanima_gore(rapor: dict) -> str:
+    """Makine secili modeli kaldiramiyorsa uygun modele DUS. Kullaniciya sorulmaz ama
+    acikca soylenir: 47 GB'lik modeli 16 GB RAM'e indirmeye calismak saatler suren bir
+    indirmenin sonunda basarisizlik demek."""
+    try:
+        bellek = next(k for k in rapor.get("kontroller", []) if k["ad"] == "bellek")
+    except StopIteration:
+        return ""
+    if bellek["durum"] != "uyari" or not bellek["veri"].get("onerilen"):
+        return ""
+    yeni = bellek["veri"]["onerilen"]
+    log(UYARI + "Bu makine secili modeli kaldiramiyor - %s modeline gecildi."
+        % bellek["veri"].get("onerilen_kisa", yeni))
+    log(BILGI + "  Buyuk modeli yine de istersen: apprentice.config.json -> ollama.model")
+    if DEGISTIR:
+        model_uygula(yeni)
+    return yeni
+
+
 def main() -> int:
     global DEGISTIR
     ap = argparse.ArgumentParser()
@@ -834,6 +874,8 @@ def main() -> int:
     ap.add_argument("--olc", action="store_true", help="num_batch olcumu yap ve yaz")
     ap.add_argument("--kural", metavar="PROJE", help="denetci kural dosyasini bu projeye yaz")
     ap.add_argument("--ide", default="", help="virgulle: cursor,vscode,windsurf,claude-desktop (bos = kurulu olanlar)")
+    ap.add_argument("--tani", action="store_true", help="yalnizca ortam tanisi (hicbir sey degistirme)")
+    ap.add_argument("--zorla", action="store_true", help="tani hata verse de kuruluma devam et")
     ap.add_argument("--kok", default="", help="Apprentice kurulum klasoru (varsayilan: bu betigin klasoru)")
     a = ap.parse_args()
     DEGISTIR = not a.kontrol
@@ -841,12 +883,26 @@ def main() -> int:
     set_root(a.kok or os.path.dirname(os.path.abspath(sys.executable if DONMUS else __file__)))
     if a.kural:
         return 0 if kural_yaz(a.kural) else 1
+    if a.tani:
+        r = tani_calistir()
+        log("")
+        log({"ok": "SONUC: her sey hazir", "uyari": "SONUC: calisir, uyarilara bak",
+             "hata": "SONUC: once [X] maddelerini coz"}[r.get("durum", "uyari")])
+        return 0 if r.get("durum") != "hata" else 1
     if not depo_mu(ROOT):
         log("Apprentice dosyalari bulunamadi: %s  (--kok <kurulum_klasoru> ver ya da Apprentice-Setup.exe kullan)" % ROOT)
         return 1
 
     log("Apprentice kurulum  (%s, %s)" % (platform.system(), ROOT))
     sonuc = []
+    adim(0, "Ortam tanisi")
+    rapor = tani_calistir()
+    if rapor.get("durum") == "hata" and not a.zorla:
+        log("")
+        log(HATA + "Yukaridaki [X] maddeleri kurulumu engelliyor - once onlari coz.")
+        log(BILGI + "Yine de denemek istersen: --zorla")
+        return 1
+    model_sec_donanima_gore(rapor)
     adim(1, "Python");        sonuc.append(kontrol_python())
     adim(2, "Ollama");        sonuc.append(kontrol_ollama())
     adim(3, "Model");         sonuc.append(kontrol_model() if sonuc[-1] else False)

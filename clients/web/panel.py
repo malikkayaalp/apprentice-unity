@@ -647,6 +647,13 @@ class Istek(BaseHTTPRequestHandler):
                 self._gonder(_usta_cevap(q.get("id", "")))
             elif yol.path == "/api/kok":
                 self._gonder({"kok": AYAR.get("kok", HOME)})
+            elif yol.path == "/api/tani":
+                # ortam tanisi: kullanici panelden de "neden calismiyor" cevabini gorsun
+                try:
+                    from core import tani as T
+                    self._gonder(T.tani(kurulum_dizini=ROOT))
+                except Exception as e:  # noqa: BLE001
+                    self._gonder({"hata": str(e)[:200]})
             elif yol.path == "/api/modeller":
                 self._gonder(_modeller())
             elif yol.path == "/api/model_kart":
