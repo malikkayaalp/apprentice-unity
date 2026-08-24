@@ -8,7 +8,10 @@ Satirlar (stdout, satir basina bir olay):
 from __future__ import annotations
 import argparse, json, os, sys, time
 
-sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+try:      # pencereli exe/pythonw: sys.stdout None olabilir (kurulum oz-testi
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)   # bu satirda cokuyordu)
+except Exception:
+    pass
 
 
 def events(p):

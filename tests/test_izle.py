@@ -7,7 +7,10 @@ import json, os, shutil, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+try:      # pencereli exe/pythonw: sys.stdout None olabilir (kurulum oz-testi
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # bu satirda cokuyordu)
+except Exception:
+    pass
 import izle  # noqa: E402
 
 HOME = os.path.join(ROOT, ".apprentice_test_home", "izle_unit")

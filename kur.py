@@ -29,6 +29,20 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 OK, HATA, UYARI, BILGI = "[ok]  ", "[X]   ", "[!]   ", "      "
+# Pencereli exe'den (Setup GUI) alt surec calistirinca Windows her cagriya konsol penceresi
+# acar - kurulum sirasinda ekran MS-DOS pencereleriyle doluyordu (yasandi). Tum cagrilar
+# bu bayragi kullanir.
+PENCERESIZ = 0x08000000 if os.name == "nt" else 0
+
+
+def kos(cmd, **kw):
+    """subprocess.run - penceresiz, ciktisi yakalanmis."""
+    kw.setdefault("capture_output", True)
+    kw.setdefault("text", True)
+    kw.setdefault("encoding", "utf-8")
+    kw.setdefault("errors", "replace")
+    kw["creationflags"] = kw.get("creationflags", 0) | PENCERESIZ
+    return subprocess.run(cmd, **kw)
 DEGISTIR = True
 ROOT = ""                 # kurulu Apprentice klasoru; set_root ile verilir
 GOMULU_DIR = ""
@@ -89,8 +103,7 @@ def sistem_python() -> str:
         if not exe:
             continue
         try:
-            out = subprocess.run([exe, "-c", "import sys;print('%d.%d' % sys.version_info[:2])"],
-                                 capture_output=True, text=True, timeout=10).stdout.strip()
+            out = kos([exe, "-c", "import sys;print('%d.%d' % sys.version_info[:2])"], timeout=10).stdout.strip()
             if tuple(int(x) for x in out.split(".")) >= (3, 10):
                 return exe
         except Exception:
@@ -124,8 +137,8 @@ def gomulu_python_indir() -> bool:
             if ad.endswith("._pth"):
                 with open(os.path.join(GOMULU_DIR, ad), "a", encoding="utf-8") as f:
                     f.write("\n..\\..\n")
-        ok = subprocess.run([os.path.join(GOMULU_DIR, "python.exe"), "-c", "import json, urllib.request; print('ok')"],
-                            capture_output=True, text=True, timeout=30).stdout.strip() == "ok"
+        ok = kos([os.path.join(GOMULU_DIR, "python.exe"), "-c", "import json, urllib.request; print('ok')"],
+                 timeout=30).stdout.strip() == "ok"
         log((OK if ok else HATA) + "Gomulu Python %s: %s" % (GOMULU_SURUM, GOMULU_DIR))
         return ok
     except Exception as e:
@@ -137,8 +150,7 @@ def kontrol_python() -> bool:
     exe = sistem_python()
     if exe:
         try:
-            v = subprocess.run([exe, "-c", "import sys;print(sys.version.split()[0])"],
-                               capture_output=True, text=True, timeout=10).stdout.strip()
+            v = kos([exe, "-c", "import sys;print(sys.version.split()[0])"], timeout=10).stdout.strip()
         except Exception:
             v = "?"
         log(OK + "Python %s  (%s)" % (v, exe))
@@ -171,9 +183,8 @@ def kontrol_ollama() -> bool:
     # Ollama sureci VARSA ikinci bir 'serve' baslatma: ikinci sunucu portu alamaz, ama bazi
     # kurulumlarda iki sunucu iki AYRI model ornegi yukler -> 80B modelde ~78 GB RAM (olculdu).
     try:
-        cikti = subprocess.run(["tasklist" if os.name == "nt" else "ps", "-ax"] if os.name != "nt"
-                               else ["tasklist", "/FI", "IMAGENAME eq ollama.exe"],
-                               capture_output=True, text=True, timeout=10).stdout.lower()
+        cikti = kos(["tasklist" if os.name == "nt" else "ps", "-ax"] if os.name != "nt"
+                    else ["tasklist", "/FI", "IMAGENAME eq ollama.exe"], timeout=10).stdout.lower()
         if "ollama" in cikti and "no tasks" not in cikti:
             log(UYARI + "Ollama sureci var ama cevap vermiyor. Ikinci sunucu BASLATILMADI "
                         "(cift model yuklemesini onlemek icin). Ollama uygulamasini yeniden baslat.")
@@ -194,7 +205,8 @@ def kontrol_ollama() -> bool:
         time.sleep(1)
         try:
             ollama_tags()
-            log(OK + "Ollama basladi")
+            log(OK + "Ollama basladi (arka planda 'ollama serve' - sistem tepsisinde SIMGE "
+                     "GORUNMEZ, bu normaldir; sunucu API'ye cevap veriyor)")
             return True
         except Exception:
             continue
@@ -505,14 +517,14 @@ def main() -> int:
     # F-sinifi yazim-ani kaniti icin; yoksa sistem yine calisir (sessiz atlanir).
     if DEGISTIR:
         py = sistem_python() or sys.executable
-        r = subprocess.run([py, "-m", "ruff", "--version"], capture_output=True)
+        r = kos([py, "-m", "ruff", "--version"])
         if r.returncode != 0:
-            r = subprocess.run([py, "-m", "pip", "install", "-q", "ruff"], capture_output=True)
+            r = kos([py, "-m", "pip", "install", "-q", "ruff"])
         log("  ruff: %s" % ("hazir" if r.returncode == 0 else "kurulamadi (istege bagli, is surer)"))
     adim(6, "Oz-test");       sonuc.append(oz_test())
     if a.olc and all(sonuc[:3]):
         adim(7, "num_batch olcumu (2-3 dk)")
-        r = subprocess.run([sistem_python() or sys.executable, os.path.join(ROOT, "core", "olcum.py"), "--yaz"])
+        r = kos([sistem_python() or sys.executable, os.path.join(ROOT, "core", "olcum.py"), "--yaz"])
         sonuc.append(r.returncode == 0)
 
     log()

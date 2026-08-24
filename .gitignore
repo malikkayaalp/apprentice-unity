@@ -12,3 +12,4 @@ runtime/
 build/
 dist/
 *.spec
+test_webapp/

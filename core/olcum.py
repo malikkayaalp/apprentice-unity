@@ -103,6 +103,7 @@ def main() -> int:
         try:
             import subprocess
             gpu = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                                 creationflags=0x08000000 if os.name == "nt" else 0,
                                  capture_output=True, text=True, timeout=10).stdout.strip()
             mk["olculdugu_gpu"] = gpu
         except Exception:

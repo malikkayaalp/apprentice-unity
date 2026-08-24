@@ -8,7 +8,10 @@ import os, shutil, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.join(ROOT, "envs", "code"))
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+try:      # pencereli exe/pythonw: sys.stdout None olabilir (kurulum oz-testi
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # bu satirda cokuyordu)
+except Exception:
+    pass
 os.environ["APPRENTICE_HOME"] = os.path.join(ROOT, ".apprentice_test_home")
 from core import rag  # noqa: E402
 

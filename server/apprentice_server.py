@@ -186,7 +186,10 @@ class Job:
         # cocuk Windows'ta ilk satirini bile yazmadan takildi (yalniz sunucu icinde).
         self.proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL,
-                                     stderr=self.stderr_f)
+                                     stderr=self.stderr_f,
+                                     # penceresiz: sunucu pencereli bir istemciden (Setup GUI,
+                                     # izleyici exe) baslatilinca her isci konsol acmasin
+                                     creationflags=0x08000000 if os.name == "nt" else 0)
         threading.Thread(target=self._wait, daemon=True).start()
 
     def _wait(self):

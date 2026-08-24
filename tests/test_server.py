@@ -13,7 +13,10 @@ import json, os, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVER = os.path.join(ROOT, "server", "apprentice_server.py")
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+try:      # pencereli exe/pythonw: sys.stdout None olabilir (kurulum oz-testi
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # bu satirda cokuyordu)
+except Exception:
+    pass
 
 SOZLESME = {"yazilan_dosyalar": list, "derleme_durumu": str, "hatalar": list,
             "tur_sayisi": int, "sure": (int, float), "ozet": str}
@@ -25,8 +28,11 @@ class Client:
         env.setdefault("APPRENTICE_IZLEYICI", "0")   # olcumler pencere acmasin
         e = dict(os.environ)
         e.update(env or {})
+        # CREATE_NO_WINDOW: pencereli exe'den (Setup GUI oz-testi) calisinca her sunucu
+        # sureci konsol penceresi aciyordu (yasandi: kurulum sirasinda MS-DOS pencereleri).
         self.p = subprocess.Popen([sys.executable, SERVER], stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=ROOT, env=e)
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=ROOT, env=e,
+                                  creationflags=0x08000000 if os.name == "nt" else 0)
         self._id = 0
 
     def call(self, method, params=None, timeout=60):
