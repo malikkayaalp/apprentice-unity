@@ -50,14 +50,14 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
 #ust .bosluk{flex:1}
 #fontKontrol{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--soluk)}
 #fontKontrol input{width:90px;accent-color:var(--vurgu)}
-#panelEkle{padding:4px 8px;border-radius:8px;border:1px solid var(--cizgi2);
+#dizilim,#panelEkle{padding:4px 8px;border-radius:8px;border:1px solid var(--cizgi2);
   background:var(--panel);color:var(--soluk);font-size:11px;outline:none;max-width:130px}
 #yerlesimSifirla{padding:4px 10px;border-radius:8px;border:1px solid var(--cizgi2);
   background:transparent;color:var(--soluk);cursor:pointer;font-size:11px}
 #yerlesimSifirla:hover{color:var(--metin);border-color:var(--cizgi)}
 
 #alan{position:relative;height:calc(100% - 48px);font-size:calc(13px*var(--f));
-  overflow-y:auto;overflow-x:hidden}
+  overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
 .kart{position:absolute;display:flex;flex-direction:column;
   border:1px solid var(--cizgi2);border-radius:13px;background:var(--panel);
   backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4);overflow:hidden;
@@ -223,6 +223,7 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
   <div class="pill">GPU <b id="gpuT">—</b><div class="olcekbar"><i id="gpuBar"></i></div></div>
   <div class="bosluk"></div>
   <div id="fontKontrol">yazı <input type="range" id="fontOlcek" min="0.75" max="1.5" step="0.05" value="1"></div>
+  <select id="dizilim" title="duruma göre hazır panel dizilimi"></select>
   <select id="panelEkle"><option value="">➕ panel ekle</option></select>
   <button id="yerlesimKaydet" title="şu anki düzeni kalıcı profilin yap" style="padding:4px 10px;
     border-radius:8px;border:1px solid var(--cizgi2);background:transparent;color:var(--soluk);
@@ -342,6 +343,21 @@ details.ham pre{margin-top:5px;padding:8px;border-radius:8px;background:rgba(0,0
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
+/* Panelin TUM POST istekleri "X-Apprentice: panel" basligiyla gider. Sunucu bunu zorunlu
+   kilar: boylece tarayicidaki yabanci bir sayfa 127.0.0.1'deki uclari tetikleyemez
+   (ozel baslik capraz kokenden ancak preflight ile gonderilebilir, ona izin vermiyoruz). */
+(function(){
+  const asil=window.fetch;
+  window.fetch=function(kaynak,ayar){
+    ayar=ayar||{};
+    if((ayar.method||"GET").toUpperCase()!=="GET"){
+      const b=new Headers(ayar.headers||{});
+      b.set("X-Apprentice","panel");
+      ayar=Object.assign({},ayar,{headers:b});
+    }
+    return asil(kaynak,ayar);
+  };
+})();
 const ASAMALAR=[["tumu","TÜMÜ"],["baslama","BAŞLANGIÇ"],["uretim","ÜRETİM"],
                 ["dogrulama","DOĞRULAMA"],["onarim","ONARIM"],["usta","USTA RAPORU"]];
 const IKON={arac:"⚙",yazim:"▣",hata:"✖",sonuc:"◈",bilgi:"·",kanit:"✓"};
@@ -349,9 +365,12 @@ const KAYNAK={tool:["ÇIRAK","yesil"],tool_result:["ÇIRAK","yesil"],write:["ÇI
   assistant:["ÇIRAK","yesil"],onarim:["USTA→","cyan"],usta_rapor:["→USTA","cyan"],
   baglam:["SİSTEM","soluk"],system:["SİSTEM","soluk"],result:["HARNESS","mavi"],
   error:["HARNESS","kirmizi"],exit:["HARNESS","mavi"],duraganlik:["HARNESS","kirmizi"]};
-let seciliIs=null, imlecN=0, filtre="tumu", takip=true, olaylar=[], t0=null;
+let seciliIs=null, imlecN=0, filtre="tumu", olaylar=[], t0=null;
+let otoSec=true;      // en yeni isi kendiliginden sec (kullanici bir ise tiklayinca kapanir)
+let dibeKilit=true;   // olay akisini dibe yapistir (kullanici yukari kaydirinca kapanir)
 let daktiloHedef="", daktiloCiz=0, dosyalar={}, seciliDosya=null, dosyaElle=false;
 let girisKartlariEklendi=false, sonOzet={}, girisSonH="", ustaSonH="";
+let ustaUyari="";   // giris/kurulum uyari balonu (HTML) - sohbet yeniden cizilse de kalir
 
 /* --------------- akilli izgara (gridstack-mini) --------------- */
 const SUTUN=24, SATIR=24;
@@ -364,6 +383,54 @@ const VARSAYILAN={
 const PANEL_ADLARI={isler:"İŞLER",boru:"BORU HATTI",akis:"OLAY AKIŞI",cirak:"ÇIRAK",
   metrik:"METRİKLER",ozet:"İŞ ÖZETİ",usta:"USTA · CLAUDE",dosyalar:"DOSYALAR",
   kod:"DOSYA GÖRÜNTÜLEYİCİ"};
+
+/* DIZILIM PRESETLERI: duruma gore hazir yerlesimler. Her biri {etiket, aciklama, gizli[], kutu{}}
+   Kutuda ADI GECMEYEN panel otomatik gizlenir - dizilimler eksiksiz olmak zorunda degil. */
+const DIZILIMLER={
+  dengeli:{etiket:"⚖ Dengeli (varsayılan)",aciklama:"her şey görünür",
+    gizli:["kod"],kutu:VARSAYILAN},
+  kodizle:{etiket:"👁 Kodu izle",aciklama:"canlı akış + yazılan dosyalar büyük",
+    gizli:["usta","ozet"],kutu:{
+      isler:{gx:0,gy:0,gw:4,gh:24}, boru:{gx:4,gy:0,gw:20,gh:3},
+      akis:{gx:4,gy:3,gw:12,gh:21}, kod:{gx:16,gy:3,gw:8,gh:14},
+      dosyalar:{gx:16,gy:17,gw:8,gh:4}, metrik:{gx:16,gy:21,gw:8,gh:3},
+      cirak:{gx:4,gy:24,gw:12,gh:8}, usta:{gx:16,gy:24,gw:8,gh:8},
+      ozet:{gx:4,gy:32,gw:20,gh:5}}},
+  sohbet:{etiket:"💬 Sohbet (usta + çırak)",aciklama:"iki sohbet yan yana, geniş",
+    gizli:["boru","metrik","ozet","kod","dosyalar"],kutu:{
+      isler:{gx:0,gy:0,gw:4,gh:24}, usta:{gx:4,gy:0,gw:10,gh:24},
+      cirak:{gx:14,gy:0,gw:10,gh:24}, akis:{gx:4,gy:24,gw:20,gh:8},
+      boru:{gx:4,gy:32,gw:10,gh:4}, metrik:{gx:14,gy:32,gw:10,gh:4},
+      ozet:{gx:4,gy:36,gw:10,gh:5}, dosyalar:{gx:14,gy:36,gw:10,gh:5},
+      kod:{gx:4,gy:41,gw:20,gh:10}}},
+  denetim:{etiket:"🔎 Denetim (kanıt odaklı)",aciklama:"boru hattı, metrik, özet, dosyalar",
+    gizli:["kod"],kutu:{
+      isler:{gx:0,gy:0,gw:4,gh:24}, boru:{gx:4,gy:0,gw:20,gh:6},
+      ozet:{gx:4,gy:6,gw:10,gh:9}, metrik:{gx:14,gy:6,gw:10,gh:9},
+      akis:{gx:4,gy:15,gw:13,gh:9}, dosyalar:{gx:17,gy:15,gw:7,gh:9},
+      cirak:{gx:4,gy:24,gw:13,gh:8}, usta:{gx:17,gy:24,gw:7,gh:8},
+      kod:{gx:4,gy:32,gw:20,gh:10}}},
+  cirakodak:{etiket:"🎯 Odak: çırak",aciklama:"tek iş, tam ekran çırak + akış",
+    gizli:["isler","boru","ozet","dosyalar","kod","usta"],kutu:{
+      cirak:{gx:0,gy:0,gw:14,gh:24}, akis:{gx:14,gy:0,gw:10,gh:19},
+      metrik:{gx:14,gy:19,gw:10,gh:5},
+      isler:{gx:0,gy:24,gw:4,gh:10}, boru:{gx:4,gy:24,gw:20,gh:4},
+      usta:{gx:0,gy:28,gw:12,gh:8}, ozet:{gx:12,gy:28,gw:12,gh:8},
+      dosyalar:{gx:0,gy:36,gw:12,gh:5}, kod:{gx:12,gy:36,gw:12,gh:10}}},
+  ustaodak:{etiket:"🧠 Odak: usta",aciklama:"Claude geniş, çırak akışı yanında",
+    gizli:["boru","ozet","dosyalar","kod"],kutu:{
+      usta:{gx:0,gy:0,gw:14,gh:24}, isler:{gx:14,gy:0,gw:4,gh:24},
+      akis:{gx:18,gy:0,gw:6,gh:14}, cirak:{gx:18,gy:14,gw:6,gh:7},
+      metrik:{gx:18,gy:21,gw:6,gh:3},
+      boru:{gx:0,gy:24,gw:24,gh:4}, ozet:{gx:0,gy:28,gw:12,gh:5},
+      dosyalar:{gx:12,gy:28,gw:12,gh:5}, kod:{gx:0,gy:33,gw:24,gh:10}}},
+  dar:{etiket:"📱 Dar ekran (tek sütun)",aciklama:"küçük pencere / dikey",
+    gizli:["boru","metrik","dosyalar","kod"],kutu:{
+      isler:{gx:0,gy:0,gw:24,gh:5}, akis:{gx:0,gy:5,gw:24,gh:9},
+      cirak:{gx:0,gy:14,gw:24,gh:10}, usta:{gx:0,gy:24,gw:24,gh:10},
+      ozet:{gx:0,gy:34,gw:24,gh:5}, boru:{gx:0,gy:39,gw:24,gh:4},
+      metrik:{gx:0,gy:43,gw:24,gh:4}, dosyalar:{gx:0,gy:47,gw:24,gh:5},
+      kod:{gx:0,gy:52,gw:24,gh:10}}}};
 let gizliPaneller=new Set(["kod"]);       // goruntuleyici: dosyaya tiklaninca acilir
 try{const g=JSON.parse(localStorage.getItem("apprentice_gizli_paneller"));
   if(g)gizliPaneller=new Set(g.filter(a=>PANEL_ADLARI[a]))}catch(e){}
@@ -379,17 +446,27 @@ if(!yerlesim||!yerlesim.isler){
       if(pr.gizli)gizliPaneller=new Set(pr.gizli.filter(a=>PANEL_ADLARI[a]));}}catch(e){}
 }
 if(!yerlesim||!yerlesim.isler)yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));
-for(const k in VARSAYILAN)
-  if(!yerlesim[k]||yerlesim[k].gx===undefined)yerlesim[k]=JSON.parse(JSON.stringify(VARSAYILAN[k]));
+function kutuGecerli(p){return p&&["gx","gy","gw","gh"].every(a=>Number.isFinite(p[a])&&p[a]>=0)}
+for(const k in VARSAYILAN)          // dort alan da sayi olmali: biri bozuksa NaN genislik ->
+  if(!kutuGecerli(yerlesim[k]))     // gorunmez ama yer kaplayan hayalet panel (yasandi riski)
+    yerlesim[k]=JSON.parse(JSON.stringify(VARSAYILAN[k]));
 for(const k in yerlesim)if(!VARSAYILAN[k])delete yerlesim[k];   // hayalet panel kalmasin
 let ustZ=10, surukluAd=null;
+let secilenDizilim=localStorage.getItem("apprentice_dizilim")||"dengeli";
 
 function hucre(){
-  const A=$("#alan").getBoundingClientRect();
+  // clientWidth/Height: KAYDIRMA CUBUGU HARIC ic olcu. Eskiden getBoundingClientRect
+  // kullaniliyordu (cubugu da sayar) - dikey cubuk cikinca en sagdaki sutun ~6 px tasip
+  // overflow-x:hidden yuzunden kirpiliyordu (boyutlandirma tutamagi da erisilemez oluyordu).
+  const e=$("#alan");
+  const A={width:e.clientWidth, height:e.clientHeight};
   // Pencere daha olcumlenmeden (font/layout hazir degilken) cagrilirsa hucreler minicik
   // cikiyor ve paneller ust uste biniyordu (yasandi). Gercek olcum yoksa gorunume dus.
-  const g=Math.max(A.width, document.documentElement.clientWidth||0, 900);
-  const y=Math.max(A.height, (document.documentElement.clientHeight||0)-48, 560);
+  // Gercek olcum varsa ONU kullan (eskiden 900/560 tabani vardi: dar pencerede hucreler
+  // gercek alandan genis hesaplanip sag sutun ekran disina tasiyor, overflow-x:hidden
+  // yuzunden ulasilamaz oluyordu). Taban yalnizca olcum HENUZ YOKKEN (0) devreye girer.
+  const g=A.width>50?A.width:Math.max(document.documentElement.clientWidth||0,900);
+  const y=A.height>50?A.height:Math.max((document.documentElement.clientHeight||0)-48,560);
   return {w:g/SUTUN, h:Math.max(26, y/SATIR)};
 }
 function cakisir(a,b){return !(a.gx+a.gw<=b.gx||b.gx+b.gw<=a.gx||a.gy+a.gh<=b.gy||b.gy+b.gh<=a.gy)}
@@ -421,7 +498,14 @@ function sikistir(){
   }
 }
 function uygula(){
+  _uygula();
+  // Kaydirma cubugu yerlestirmeden SONRA belirirse ic genislik daralir; tek sefer tazele.
+  const e=$("#alan");
+  if(e && e.clientWidth!==uygula._g){uygula._g=e.clientWidth; _uygula();}
+}
+function _uygula(){
   const h=hucre();
+  uygula._g=$("#alan").clientWidth;
   document.querySelectorAll(".kart").forEach(k=>{
     const ad=k.dataset.p, p=yerlesim[ad]; if(!p)return;
     k.style.display=gizliPaneller.has(ad)?"none":"flex";
@@ -440,19 +524,63 @@ window.addEventListener("resize",uygula);
 // pencere boyutu gecikmeli kesinlesir (Edge --app acilisi): olcum degisince yeniden yerlestir
 if(window.ResizeObserver)new ResizeObserver(()=>uygula()).observe(document.getElementById("alan"));
 window.addEventListener("load",()=>{uygula();setTimeout(uygula,150);setTimeout(uygula,600);});
-$("#yerlesimSifirla").onclick=()=>{yerlesim=JSON.parse(JSON.stringify(VARSAYILAN));kaydet();duzenle()};
+$("#yerlesimSifirla").onclick=()=>{dizilimUygula("dengeli");};
 $("#yerlesimKaydet").onclick=()=>{
   localStorage.setItem("apprentice_yerlesim_profil",
     JSON.stringify({yerlesim:yerlesim,gizli:[...gizliPaneller]}));
-  tost("💾 düzenin kalıcı profil olarak kaydedildi — sürüm değişse bile geri gelir");
+  secilenDizilim="benim"; localStorage.setItem("apprentice_dizilim","benim");
+  dizilimListesi();
+  tost("💾 düzenin kaydedildi — dizilim listesinde 🗂 Benim düzenim olarak seçilebilir");
 };
 $("#panelEkle").onchange=e=>{if(e.target.value){gizliPaneller.delete(e.target.value);
-  panelKaydet();duzenle()}e.target.value=""};
+  panelKaydet();duzenle();kaydet();dizilimOzellesti()}e.target.value=""};
+
+/* ---- dizilim (preset) secici ---- */
+function dizilimUygula(ad,sessiz){
+  const d=DIZILIMLER[ad];
+  if(ad==="benim"){                                   // kullanicinin 💾 ile kaydettigi duzen
+    let pr=null; try{pr=JSON.parse(localStorage.getItem("apprentice_yerlesim_profil"))}catch(e){}
+    if(!pr||!pr.yerlesim||!pr.yerlesim.isler){tost("kayıtlı düzenin yok — önce 💾 düzenim");return false}
+    yerlesim=JSON.parse(JSON.stringify(pr.yerlesim));
+    gizliPaneller=new Set((pr.gizli||[]).filter(a=>PANEL_ADLARI[a]));
+  }else{
+    if(!d)return false;
+    yerlesim={};
+    for(const k in VARSAYILAN)                        // once tam iskelet (hayalet/kayip panel olmasin)
+      yerlesim[k]=JSON.parse(JSON.stringify(d.kutu[k]||VARSAYILAN[k]));
+    gizliPaneller=new Set((d.gizli||[]).filter(a=>PANEL_ADLARI[a]));
+  }
+  secilenDizilim=ad; localStorage.setItem("apprentice_dizilim",ad);
+  kaydet(); panelKaydet(); duzenle();
+  if(!sessiz)tost((d?d.etiket:"🗂 Benim düzenim")+(d&&d.aciklama?" — "+d.aciklama:""));
+  return true;
+}
+function dizilimListesi(){
+  const sec=$("#dizilim");
+  let pr=null; try{pr=JSON.parse(localStorage.getItem("apprentice_yerlesim_profil"))}catch(e){}
+  sec.innerHTML=Object.keys(DIZILIMLER).map(k=>
+      '<option value="'+k+'">'+DIZILIMLER[k].etiket+'</option>').join("")+
+    (pr&&pr.yerlesim?'<option value="benim">🗂 Benim düzenim</option>':"")+
+    '<option value="__ozel">✎ özel (elle taşındı)</option>';
+  sec.value=secilenDizilim;
+}
+$("#dizilim").onchange=e=>{
+  const v=e.target.value;
+  if(v==="__ozel"){e.target.value=secilenDizilim;return}    // bilgi amacli, secilemez
+  dizilimUygula(v);
+};
+// elle tasima/boyutlandirma yapilinca secici "ozel"e duser (yalanci "dengeli" gostermesin)
+function dizilimOzellesti(){
+  if(secilenDizilim==="__ozel")return;
+  secilenDizilim="__ozel"; localStorage.setItem("apprentice_dizilim","__ozel");
+  const sec=$("#dizilim"); if(sec)sec.value="__ozel";
+}
+dizilimListesi();
 document.querySelectorAll(".kart").forEach(k=>{
   const ad=k.dataset.p;
   const kx=document.createElement("span"); kx.className="kapat"; kx.textContent="✕";
   kx.title="paneli kapat"; kx.addEventListener("pointerdown",e=>e.stopPropagation());
-  kx.onclick=e=>{e.stopPropagation();gizliPaneller.add(ad);panelKaydet();duzenle()};
+  kx.onclick=e=>{e.stopPropagation();gizliPaneller.add(ad);panelKaydet();duzenle();kaydet();dizilimOzellesti()};
   k.querySelector(".kbaslik").appendChild(kx);
   k.addEventListener("pointerdown",()=>{k.style.zIndex=++ustZ;
     document.querySelectorAll(".kart").forEach(x=>x.classList.remove("onde"));k.classList.add("onde")});
@@ -468,7 +596,7 @@ document.querySelectorAll(".kart").forEach(k=>{
       if(ngx!==p.gx||ngy!==p.gy){p.gx=ngx;p.gy=ngy;duzenle()}
     }
     function birak(){removeEventListener("pointermove",tasi);removeEventListener("pointerup",birak);
-      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet()}
+      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet();dizilimOzellesti()}
     addEventListener("pointermove",tasi);addEventListener("pointerup",birak);e.preventDefault();
   });
   const tut=k.querySelector(".tutamak");
@@ -482,7 +610,7 @@ document.querySelectorAll(".kart").forEach(k=>{
       if(ngw!==p.gw||ngh!==p.gh){p.gw=ngw;p.gh=ngh;duzenle()}
     }
     function birak(){removeEventListener("pointermove",boyut);removeEventListener("pointerup",birak);
-      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet()}
+      k.classList.remove("tasiniyor");surukluAd=null;duzenle();kaydet();dizilimOzellesti()}
     addEventListener("pointermove",boyut);addEventListener("pointerup",birak);
     e.preventDefault();e.stopPropagation();
   });
@@ -593,8 +721,14 @@ function ekleOlay(o){
   ic+='</div>';
   if(t0){const dt=((Date.now()-t0)/1000)|0;ic+='<span class="zaman">+'+dt+'s</span>';}
   div.innerHTML=ic; kap.appendChild(div);
-  while(kap.children.length>500)kap.removeChild(kap.firstChild);
-  if(takip)kap.scrollTop=kap.scrollHeight;
+  // Budama: #girisKap AKISIN ILK COCUGU (GÖREV / TAM PROMPT / SİSTEM MESAJI kartlari).
+  // firstChild'i silmek 500. olaydan sonra o kartlari kalici olarak yok ediyordu - hep
+  // ilk OLAY dugumunu sil, giris kabini atla.
+  while(kap.children.length>501){
+    const ilk=kap.children[0];
+    kap.removeChild(ilk.id==="girisKap"?(kap.children[1]||ilk):ilk);
+  }
+  if(dibeKilit)kap.scrollTop=kap.scrollHeight;
 }
 
 /* --------------- cirak daktilosu --------------- */
@@ -648,6 +782,10 @@ function isSec(id){
   seciliIs=id; imlecN=0; olaylar=[]; dosyalar={}; seciliDosya=null; dosyaElle=false;
   daktiloHedef=""; daktiloCiz=0; t0=null; girisSonH=""; sonOzet={};
   $("#akis").innerHTML="";
+  const kg=$("#kodGoster");            // eski isin dosyasi ekranda kalmasin
+  if(kg){kg.innerHTML=""; kg.dataset.h="";}
+  const kb=$("#kodBaslik"); if(kb)kb.textContent="—";
+  dosyalarCiz();
   $("#dmetin").innerHTML='<span class="bekliyor">bekleniyor…</span>';
 }
 async function isleriCek(){
@@ -670,7 +808,7 @@ async function isleriCek(){
         (j.durum==="calisiyor"?"koşuyor":j.derleme)+'</span>'+
         (j.kaynak==="web-panel"?'<span class="rozet web">⚡ web</span>':"")+'</div>'+
         '<span class="sil" title="listeden kaldır (yalnız arayüzden)">✕</span>';
-      d.onclick=()=>{takip=false;isSec(j.id)};
+      d.onclick=()=>{otoSec=false;isSec(j.id)};
       d.querySelector(".sil").onclick=e=>{e.stopPropagation();gizliIsler.add(j.id);
         localStorage.setItem("apprentice_gizli_isler",JSON.stringify([...gizliIsler]))};
       kap.appendChild(d);
@@ -682,14 +820,18 @@ async function isleriCek(){
       g.onclick=()=>{gizliIsler.clear();localStorage.removeItem("apprentice_gizli_isler")};
       kap.appendChild(g);
     }
-    if(takip&&gorunur.length)isSec(gorunur[0].id);
+    if(otoSec&&gorunur.length)isSec(gorunur[0].id);
   }catch(e){}
   setTimeout(isleriCek,2000);
 }
 async function olaylariCek(){
   if(seciliIs){
     try{
-      const r=await(await fetch("/api/olaylar?is="+seciliIs+"&n="+imlecN)).json();
+      const istenen=seciliIs, istenenN=imlecN;          // ucusta is degisirse cevabi at
+      const r=await(await fetch("/api/olaylar?is="+istenen+"&n="+istenenN)).json();
+      // Kullanici bekleme sirasinda baska ise gectiyse: eski isin olaylarini YENI isin
+      // akisina basmak + imleci ileri almak kalici olay kaybina yol aciyordu.
+      if(istenen!==seciliIs||istenenN!==imlecN)return;
       const s=r.ozet||{}; Object.assign(sonOzet,s);
       if(!t0&&s.baslangic)t0=s.baslangic*1000;
       girisKartlari();
@@ -729,11 +871,15 @@ async function olaylariCek(){
       $("#mArac").textContent=sy.arac||0; $("#mYazim").textContent=sy.yazim||0;
       $("#mOnarim").textContent=sy.onarim||0; $("#mCagri").textContent=ku.model_cagrisi||0;
       const b=s.baglam||{};
-      $("#ozetKutu").innerHTML="iş: <b>"+(s.baslik||s.id||"—")+"</b><br><span style='font-size:.85em'>"+(s.id||"")+
-        "</span><br>ortam: <b>"+(s.ortam||"—")+"</b> · doğrulama: <b>"+(s.dogrulama||"—")+
-        "</b> · canlı: <b>"+(s.canli?"açık":"kapalı")+"</b> · durum: <b>"+(s.durum||"—")+
-        "</b><br>bağlam: sistem <b>"+(b.sistem||"—")+"</b> kr · hafıza <b>"+(b.hafiza||"—")+
-        "</b> · STATE <b>"+(b.durum||"—")+"</b> · harita <b>"+(b.harita||"—")+
+      // KACIS: baslik/ortam/dogrulama/durum kullanicidan ve is dosyasindan gelir; kacirilmadan
+      // innerHTML'e girince "<b" gibi bir baslik paneli bozuyordu (is listesinde kacirilirken
+      // burada kacirilmiyordu - tutarsizdi).
+      $("#ozetKutu").innerHTML="iş: <b>"+kacir(s.baslik||s.id||"—")+"</b><br><span style='font-size:.85em'>"+
+        kacir(s.id||"")+
+        "</span><br>ortam: <b>"+kacir(s.ortam||"—")+"</b> · doğrulama: <b>"+kacir(s.dogrulama||"—")+
+        "</b> · canlı: <b>"+(s.canli?"açık":"kapalı")+"</b> · durum: <b>"+kacir(s.durum||"—")+
+        "</b><br>bağlam: sistem <b>"+(+b.sistem||"—")+"</b> kr · hafıza <b>"+(+b.hafiza||"—")+
+        "</b> · STATE <b>"+(+b.durum||"—")+"</b> · harita <b>"+(+b.harita||"—")+
         "</b><br>görev: "+kacir((s.gorev||"").slice(0,180));
       const uy=$("#uyarilar"); uy.innerHTML="";
       (s.uyarilar||[]).slice(0,5).forEach(u=>{
@@ -756,12 +902,13 @@ $("#uCli").onchange=e=>{
   $("#uModel").style.display=ozel?"none":"";
   $("#uEffort").style.display=ozel?"none":"";
 };
+const USTA_CEVAP={};   // id -> cevap metni: biten cevap DEGISMEZ, her turda yeniden cekme
 async function ustaChatCek(){
   try{
     const r=await(await fetch("/api/usta_liste")).json();
     const ist=(r.istekler||[]).slice().reverse();          // eski -> yeni (sohbet sirasi)
     const kosan=ist.filter(x=>x.durum==="calisiyor").length;
-    $("#ustaDurum").textContent=kosan?"● Claude düşünüyor":"";
+    $("#ustaDurum").textContent=kosan?"● Claude düşünüyor":(ustaUyari?"giriş gerekli":"");
     let h="";
     for(const x of ist){
       h+='<div class="balon ben">'+kacir(x.ozet)+(x.araclar?' <span class="bmeta">araç izinli</span>':"")+'</div>';
@@ -772,13 +919,19 @@ async function ustaChatCek(){
            (x.baslangic||0)+'"></span>'+
            (x.araclar?" (araçlı istekler 30-60 sn sürebilir)":"")+'</div>';
       }else{
-        const c=await(await fetch("/api/usta_cevap?id="+x.id)).json();
-        h+='<div class="balon karsi">'+zenginMetin((c.cevap||"—").slice(0,6000))+
+        // ONBELLEK: eskiden her yoklamada (2.5 sn) her tamamlanmis istek icin ayri HTTP
+        // cagrisi yapiliyordu - 30 mesajlik sohbette tur basina 30 istek.
+        if(USTA_CEVAP[x.id]===undefined){
+          const c=await(await fetch("/api/usta_cevap?id="+x.id)).json();
+          USTA_CEVAP[x.id]=c.cevap||"—";
+        }
+        h+='<div class="balon karsi">'+zenginMetin(USTA_CEVAP[x.id].slice(0,6000))+
            '<span class="bmeta">'+(x.sure||"?")+' sn'+(x.araclar?" · araçlı":"")+'</span></div>';
       }
     }
     if(!ist.length)h='<div class="balon karsi" style="opacity:.6">Merhaba — buradan Claude ile konuş; '+
       '"araç izni" açıkken çırağı da çalıştırabilirim.</div>';
+    if(ustaUyari)h+=ustaUyari;      // giris/kurulum uyarisi: yeniden cizimde SILINMEZ
     if(ustaSonH!==h){
       const kap=$("#ustaChat"); const dipte=kap.scrollTop+kap.clientHeight>=kap.scrollHeight-80;
       kap.innerHTML=h; ustaSonH=h;
@@ -803,33 +956,33 @@ async function ustaGonder(){
         ekler:uEkler})})).json();
     if(r.hata){
       tost("HATA: "+r.hata);
-      // giris/kurulum eksigi kalici gorunsun (tost kaybolur): sohbete uyari balonu
+      // Giris/kurulum eksigi KALICI gorunmeli. Eskiden balon dogrudan DOM'a ekleniyordu ve
+      // ustaChatCek 2.5 sn sonra sohbeti sunucudan yeniden cizip balonu (ve giris dugmesini)
+      // siliyordu - dugme fiilen tiklanamazdi. Artik uyari ustaUyari'da yasar, her cizimde eklenir.
       if(/oturum|login|bulunamad/i.test(r.hata)){
-        const kap=$("#ustaChat");
-        kap.insertAdjacentHTML("beforeend",
-          '<div class="balon karsi" style="border-color:rgba(224,108,95,.55);color:var(--kirmizi)">'+
+        ustaUyari='<div class="balon karsi" style="border-color:rgba(224,108,95,.55);color:var(--kirmizi)">'+
           kacir(r.hata)+
-          (/oturum|login/i.test(r.hata)?'<br><button id="girisBtn" style="margin-top:8px;padding:6px 14px;'+
+          (/oturum|login/i.test(r.hata)?'<br><button class="girisBtn" style="margin-top:8px;padding:6px 14px;'+
            'border:none;border-radius:9px;cursor:pointer;font-weight:700;color:#fff;'+
            'background:linear-gradient(135deg,var(--vurgu),#c96a48)">Claude&#39;a giriş yap</button>'+
            '<div style="margin-top:6px;color:var(--soluk);font-size:.85em">Claude Desktop girişi '+
-           'CLI&#39;ya geçmez — ayrı oturumdur.</div>':"")+'</div>');
-        const gb=$("#girisBtn");
-        if(gb)gb.onclick=async()=>{
-          const j=await(await fetch("/api/claude_login",{method:"POST",
-            headers:{"Content-Type":"application/json"},body:"{}"})).json();
-          tost(j.hata?("HATA: "+j.hata):"giriş penceresi açıldı — tarayıcıda hesabınla giriş yap");
-        };
-        kap.scrollTop=kap.scrollHeight; ustaSonH="";
-        $("#ustaDurum").textContent="giriş gerekli";
+           'CLI&#39;ya geçmez — ayrı oturumdur.</div>':"")+'</div>';
+        ustaSonH=""; ustaChatCek();
       }
     }
     else{$("#uPrompt").value="";ustaSonH="";uEkler=[];eklerCiz(uEkler,"#uEkler");
-         $("#ustaDurum").textContent="";}
+         ustaUyari=""; $("#ustaDurum").textContent="";}
   }catch(e){tost("HATA: "+e);}
   b.disabled=false;
 }
 $("#uGonder").onclick=ustaGonder;
+// giris dugmesi her yeniden cizimde yeni bir dugum oldugu icin olay DELEGASYONU ile baglanir
+$("#ustaChat").addEventListener("click",async e=>{
+  if(!e.target.classList.contains("girisBtn"))return;
+  const j=await(await fetch("/api/claude_login",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:"{}"})).json();
+  tost(j.hata?("HATA: "+j.hata):"giriş penceresi açıldı — tarayıcıda hesabınla giriş yap");
+});
 $("#uPrompt").addEventListener("keydown",e=>{
   if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();ustaGonder();}});
 
@@ -898,10 +1051,14 @@ async function cirakSohbet(g){
 }
 async function cirakGonder(){
   const g=$("#kGorev").value.trim(); if(!g)return;
+  const b=$("#kGonder");
+  if(b.disabled)return;                       // art arda Enter: iki es zamanli akis olmasin
   if($("#kMod").value==="sohbet"){
-    $("#kGorev").value=""; await cirakSohbet(g); return;
+    b.disabled=true; $("#kGorev").value="";
+    try{await cirakSohbet(g);}finally{b.disabled=false;}
+    return;
   }
-  const b=$("#kGonder"); b.disabled=true;
+  b.disabled=true;
   try{
     const veri={baslik:$("#kBaslik").value, gorev:g, model:$("#kModel").value,
       kriterler:$("#kKriter").value.split(";").map(x=>x.trim()).filter(Boolean),
@@ -914,7 +1071,7 @@ async function cirakGonder(){
     else{
       $("#kGorev").value=""; $("#kBaslik").value=""; $("#kKriter").value="";
       kEkler=[]; eklerCiz(kEkler,"#kEkler");
-      tost("🔧 "+(r.baslik||r.is_id)+" başladı"); takip=true;
+      tost("🔧 "+(r.baslik||r.is_id)+" başladı"); otoSec=true; dibeKilit=true;
     }
   }catch(e){tost("HATA: "+e);}
   b.disabled=false;
@@ -999,7 +1156,7 @@ $("#eject").onclick=async()=>{
   }catch(e){}
 };
 $("#akis").addEventListener("wheel",()=>{const a=$("#akis");
-  takip=a.scrollTop+a.clientHeight>=a.scrollHeight-60;});
+  dibeKilit=a.scrollTop+a.clientHeight>=a.scrollHeight-60;});
 
 boruCiz(); duzenle(); filtreSec("tumu");
 isleriCek(); olaylariCek(); daktiloAdim(); ustaChatCek(); modelleriYukle(); kokGoster();

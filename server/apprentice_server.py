@@ -151,16 +151,19 @@ class Job:
         pf = os.path.join(self.dir, "prompt.txt")
         with open(pf, "w", encoding="utf-8", newline="\n") as f:
             f.write(prompt)
+        kayit = {"id": self.id, "ortam": self.ortam, "gorev": self.gorev,
+                 "kabul_kriterleri": self.kriterler, "oturum": self.oturum,
+                 "play": self.play, "model": self.model, "baslangic": self.t0,
+                 "calisma_dizini": self.workdir,
+                 # izleyiciler dogru gostersin (olculdu: alan yazilmayinca panel
+                 # her ise "tam" diyordu - kullanici kipinden suphe etti)
+                 "dogrulama": self.dogrulama, "canli": self.canli,
+                 "harita": self.harita, "yazilabilir": self.yazilabilir}
+        # istemciler (panel) kaynak/baslik gibi alanlari ISI BASLATMADAN once ekler; izleyiciler
+        # job.json'u bir kez okuyup onbellege aldigi icin sonradan yamalanan alan kaybolur.
+        kayit.update(getattr(self, "ek_alanlar", None) or {})
         with open(os.path.join(self.dir, "job.json"), "w", encoding="utf-8", newline="\n") as f:
-            json.dump({"id": self.id, "ortam": self.ortam, "gorev": self.gorev,
-                       "kabul_kriterleri": self.kriterler, "oturum": self.oturum,
-                       "play": self.play, "model": self.model, "baslangic": self.t0,
-                       "calisma_dizini": self.workdir,
-                       # izleyiciler dogru gostersin (olculdu: alan yazilmayinca panel
-                       # her ise "tam" diyordu - kullanici kipinden suphe etti)
-                       "dogrulama": self.dogrulama, "canli": self.canli,
-                       "harita": self.harita, "yazilabilir": self.yazilabilir},
-                      f, ensure_ascii=False, indent=1)
+            json.dump(kayit, f, ensure_ascii=False, indent=1)
         sess_dir = os.path.join(HOME, "sessions", self.ortam)
         cmd = [PYTHON, runner, "--jsonl", self.events_path, "--prompt-file", pf,
                "--session", self.oturum, "--session-dir", sess_dir,
@@ -213,8 +216,20 @@ class Job:
         self.done = True
 
     def kill(self):
-        if self.proc and self.proc.poll() is None:
-            self.proc.kill()
+        """Isciyi VE torunlarini oldur. Windows'ta proc.kill() yalniz Python'u oldurur;
+        run_shell/run_tests (pytest, 120 s'ye kadar) ve ruff torunlari yasamaya devam edip
+        calisma dizinine yazmayi surdurur - is 'bitti' gorunurken. taskkill /T agaci keser."""
+        if not (self.proc and self.proc.poll() is None):
+            return
+        if os.name == "nt":
+            try:
+                subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"],
+                               capture_output=True, timeout=20,
+                               creationflags=0x08000000)
+                return
+            except Exception:
+                pass                          # taskkill yoksa/basarisizsa duz kill'e dus
+        self.proc.kill()
 
     def events(self) -> list:
         out = []
@@ -572,6 +587,14 @@ def tool_worker_run(a: dict) -> dict:
                     _progress(token, len(ev), msg)
             gonderilen = len(ev)
         if getattr(job, "iptal", False):
+            # Isci GERCEKTEN olene kadar (en cok 5 sn) bekle: kill() Windows'ta surec agacini
+            # taskkill ile kesiyor ve bu is parcaciginin 'exit' olayini yazmasi zaman aliyor.
+            # Beklemeden donunce rapor ve olay dosyasi yarim kaliyordu (izleyici "calisiyor"da
+            # asili kalir, testte exit olayi eksik cikti).
+            for _ in range(50):
+                if job.done:
+                    break
+                time.sleep(0.1)
             break
     rep = job.report()
     job.usta_rapor_isaretle(rep)
@@ -744,13 +767,16 @@ def handle(req: dict) -> dict | None:
         job = REQ_JOBS.pop(p.get("requestId"), None)
         if job is not None and not job.done:
             job.iptal = True
-            job.kill()
-            _log("iptal: is %s olduruldu (istek %s)" % (job.id, p.get("requestId")))
+            # NIYETI ONCE YAZ: kill() Windows'ta taskkill /T ile surec agacini keser ve bu
+            # ~100 ms surer; bu sirada isci olup rapor donebiliyor, iptal olayi cevaptan SONRA
+            # dosyaya dusuyordu (izleyici/rapor "iptal edildi" bilgisini kaciriyordu).
             try:
                 with open(job.events_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps({"type": "error", "message": "istemci iptal etti"}) + "\n")
             except Exception:
                 pass
+            job.kill()
+            _log("iptal: is %s olduruldu (istek %s)" % (job.id, p.get("requestId")))
         return None
     if m == "notifications/initialized":
         roots_iste()

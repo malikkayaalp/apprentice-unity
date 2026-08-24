@@ -53,16 +53,25 @@ class IsDeposu:
             return False
         yeni = []
         try:
-            with open(p, encoding="utf-8", errors="replace") as f:
+            with open(p, "rb") as f:
                 f.seek(eski)
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            yeni.append(json.loads(line))
-                        except Exception:
-                            pass
-                self._ofset[jid] = f.tell()
+                ham = f.read()
+            # YARIM SATIR KORUMASI: isci tek write ile 20 KB'lik kayit basabiliyor; yoklama
+            # yazimin ortasina denk gelirse eskiden yarim satir "bozuk JSON" diye atlanip
+            # ofset ilerletiliyordu -> o olay BIR DAHA HIC okunmuyordu (MCP raporu dogru,
+            # izleyici eksik). Artik yalniz TAM satirlar islenir, kalani gelecek turda.
+            son_nl = ham.rfind(b"\n")
+            if son_nl < 0:
+                return False                      # daha tam satir yok
+            tam = ham[:son_nl + 1]
+            for line in tam.decode("utf-8", "replace").splitlines():
+                line = line.strip()
+                if line:
+                    try:
+                        yeni.append(json.loads(line))
+                    except Exception:
+                        pass
+            self._ofset[jid] = eski + len(tam)
         except OSError:
             return False
         if jid not in self.durumlar:

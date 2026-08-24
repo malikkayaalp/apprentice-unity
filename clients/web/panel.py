@@ -156,7 +156,7 @@ def _usta_rapor_tamamla(jid: str):
             _USTA_TAMAM.add(jid)
         return
     try:
-        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
         import importlib
         srv = importlib.import_module("server.apprentice_server")
         rep = srv.rapor_diskten(jid) or {}
@@ -225,7 +225,7 @@ def _is_listesi() -> list:
 
 def _gorev_baslat(veri: dict) -> dict:
     """Web'den is: sunucudaki Job sinifinin ta kendisiyle (ayni olay semasi, ayni ev)."""
-    os.environ.setdefault("APPRENTICE_HOME", HOME)
+    os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
     os.environ["APPRENTICE_IZLEYICI"] = "0"            # panel zaten izliyor; pencere acma
     import importlib
     srv = importlib.import_module("server.apprentice_server")
@@ -241,9 +241,16 @@ def _gorev_baslat(veri: dict) -> dict:
     # calisma dizini SECILI CALISMA ALANINA gore cozulur (kullanicinin proje klasoru;
     # ust bardaki klasor secici belirler, varsayilan panel evi)
     dizin = str(veri.get("calisma_dizini") or "panel").strip().replace("\\", "/")
-    if ".." in dizin or os.path.isabs(dizin):
+    # Windows tuzagi: "C:foo" SURUCU-GORELI yoldur - os.path.isabs() False der ama join
+    # calisma alanini tamamen yok sayar (olculdu: ntpath.join(r"D:\ws","C:foo") == "C:foo").
+    # Bu yuzden surucu harfi de reddedilir.
+    if ".." in dizin or os.path.isabs(dizin) or os.path.splitdrive(dizin)[0]:
         return {"hata": "calisma_dizini calisma alanina goreli olmali"}
     tam_dizin = os.path.join(AYAR.get("kok", HOME), dizin)
+    kok_ger = os.path.realpath(AYAR.get("kok", HOME))
+    if os.path.realpath(tam_dizin) != kok_ger and \
+            not os.path.realpath(tam_dizin).startswith(kok_ger + os.sep):
+        return {"hata": "calisma_dizini calisma alani disina cikiyor"}
     os.makedirs(tam_dizin, exist_ok=True)
     # ekler: metin dosyalari dogrudan calisma dizinine - `ara` (RAG) otomatik indeksler
     ek_yollar, ek_red = _ekleri_kaydet(veri.get("ekler") or [], tam_dizin, yalniz_metin=True)
@@ -257,7 +264,7 @@ def _gorev_baslat(veri: dict) -> dict:
     eski_ctx = os.environ.get("APPRENTICE_CTX")
     try:
         kart = _model_kart(model)
-        cfg_ctx = int(srv.config.env_or("APPRENTICE_CTX", "ollama.num_ctx", 131072) or 131072)
+        cfg_ctx = int(srv.config.env_or("APPRENTICE_CTX", "makine.num_ctx", 131072) or 131072)
         if kart.get("ctx") and int(kart["ctx"]) < cfg_ctx:
             os.environ["APPRENTICE_CTX"] = str(int(kart["ctx"]))
     except Exception:
@@ -266,6 +273,12 @@ def _gorev_baslat(veri: dict) -> dict:
                   "", tam_dizin, kapali_ek, dogrulama,
                   [str(x).strip() for x in (veri.get("yazilabilir") or []) if str(x).strip()],
                   bool(veri.get("harita")), bool(veri.get("canli", True)))
+    # kaynak/baslik job.json'a BASLAMADAN once yazilir: izleyiciler job.json'u isin ilk
+    # gorunumunde BIR KEZ okuyup onbellege aliyor - sonradan yamalanan alanlar (kaynak/baslik)
+    # yarisi kaybedince is, panel oturumu boyunca rozetsiz/basliksiz kaliyordu.
+    job.ek_alanlar = {"kaynak": "web-panel",
+                      "baslik": str(veri.get("baslik") or "").strip()
+                      or " ".join(gorev.split()[:6])[:48]}
     job.start()
     if eski_ctx is None:
         os.environ.pop("APPRENTICE_CTX", None)
@@ -282,18 +295,7 @@ def _gorev_baslat(veri: dict) -> dict:
         except Exception:
             pass
     threading.Timer(sinir, _bekci).start()
-    # kaynak isareti: usta ve izleyiciler bu isin panelden geldigini gorsun
-    jp = os.path.join(job.dir, "job.json")
-    baslik = str(veri.get("baslik") or "").strip() or " ".join(gorev.split()[:6])[:48]
-    try:
-        with open(jp, encoding="utf-8") as f:
-            j = json.load(f)
-        j["kaynak"] = "web-panel"
-        j["baslik"] = baslik
-        with open(jp, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(j, f, ensure_ascii=False, indent=1)
-    except OSError:
-        pass
+    baslik = job.ek_alanlar["baslik"]
     # usta kutusu: MCP sunucusu bir sonraki arac cagrisinda bildirir
     bp = os.path.join(HOME, "panel_bekleyen.json")
     try:
@@ -336,7 +338,7 @@ def _modeller() -> dict:
     import importlib
     varsayilan = ""
     try:
-        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
         srv = importlib.import_module("server.apprentice_server")
         varsayilan = srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model") or ""
     except Exception:
@@ -368,7 +370,7 @@ def _model_yukle() -> dict:
     bedelini pesin oder). Ollama zaten tembel yukler; bu dugme yalnizca konfor."""
     try:
         import importlib, urllib.request
-        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
         srv = importlib.import_module("server.apprentice_server")
         model = srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
 
@@ -399,6 +401,8 @@ def _model_bosalt() -> dict:
 
 
 SOHBET = {"mesajlar": []}          # cirakla serbest sohbet (gorev kalibi yok, hafizali)
+SOHBET_KILIT = threading.Lock()    # iki sekme/istek ayni gecmisi bozmasin (yaris: pop()
+                                   # listenin SONUNU siliyordu - baskasinin cevabini)
 
 
 def _cirak_sohbet(veri: dict) -> dict:
@@ -413,11 +417,14 @@ def _cirak_sohbet(veri: dict) -> dict:
             return {"cevap": "", "sifirlandi": True}
     if not prompt:
         return {"hata": "bos"}
-    os.environ.setdefault("APPRENTICE_HOME", HOME)
+    os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
     srv = importlib.import_module("server.apprentice_server")
     model = str(veri.get("model") or "").strip() or \
         srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
-    SOHBET["mesajlar"].append({"role": "user", "content": prompt})
+    with SOHBET_KILIT:
+        SOHBET["mesajlar"].append({"role": "user", "content": prompt})
+        benim = SOHBET["mesajlar"][-1]          # kimlikle sil: pop() baskasinin ogesini siliyordu
+        gecmis = list(SOHBET["mesajlar"][-20:])
     body = json.dumps({"model": model, "stream": False,
                        "messages": [{"role": "system", "content":
                                      "Sen Apprentice sisteminin yerel cirak modelisin (%s). "
@@ -641,7 +648,7 @@ class Istek(BaseHTTPRequestHandler):
         self.end_headers()
         if not prompt:
             return
-        os.environ.setdefault("APPRENTICE_HOME", HOME)
+        os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
         srv = importlib.import_module("server.apprentice_server")
         model = str(veri.get("model") or "").strip() or \
             srv.config.env_or(["APPRENTICE_MODEL", "UNITY_CODE_MODEL"], "ollama.model")
@@ -651,7 +658,7 @@ class Istek(BaseHTTPRequestHandler):
                                          "Sen Apprentice sisteminin yerel cirak modelisin (%s). "
                                          "Turkce, kisa ve net cevap ver."
                                          % model.split("/")[-1].split(":")[0]}]
-                           + SOHBET["mesajlar"][-20:],
+                           + gecmis,
                            "options": {"num_ctx": 16384, "temperature": 0.7,
                                        "num_predict": 1200},
                            "keep_alive": "30m"}).encode()
@@ -676,14 +683,34 @@ class Istek(BaseHTTPRequestHandler):
             except OSError:
                 pass
         cevap = "".join(parcalar).strip()
-        if cevap:
-            SOHBET["mesajlar"].append({"role": "assistant", "content": cevap})
-        else:
-            SOHBET["mesajlar"].pop()
+        with SOHBET_KILIT:
+            if cevap:
+                SOHBET["mesajlar"].append({"role": "assistant", "content": cevap})
+            elif benim in SOHBET["mesajlar"]:
+                SOHBET["mesajlar"].remove(benim)
+
+    def _yerel_istek_mi(self) -> bool:
+        """CSRF/yerel-web korumasi: panel 127.0.0.1'de dinler ama tarayicidaki HERHANGI bir
+        site 'basit istek' (text/plain) ile bu uclara POST atabilir - /api/usta ozel CLI ile
+        keyfi komut calistirmak demektir. Iki katman:
+          1) Origin/Referer varsa bizim adresimiz olmali (yabanci site kendi Origin'ini gonderir).
+          2) Ozel baslik zorunlu: capraz kokenden ozel baslik ancak preflight ile gonderilebilir,
+             biz CORS izni vermedigimiz icin preflight basarisiz olur."""
+        for bas in ("Origin", "Referer"):
+            d = self.headers.get(bas)
+            if d:
+                a = urllib.parse.urlparse(d)
+                if a.hostname not in ("127.0.0.1", "localhost", "::1"):
+                    return False
+        return self.headers.get("X-Apprentice") == "panel"
 
     def do_POST(self):
         try:
+            if not self._yerel_istek_mi():
+                return self._gonder({"hata": "yetkisiz istek (panel disindan)"}, kod=403)
             n = int(self.headers.get("Content-Length") or 0)
+            if n > 40_000_000:
+                return self._gonder({"hata": "istek govdesi cok buyuk"}, kod=413)
             veri = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
             if urllib.parse.urlparse(self.path).path == "/api/cirak_sohbet_akis":
                 return self._sohbet_akisi(veri)
@@ -719,7 +746,7 @@ class Istek(BaseHTTPRequestHandler):
                 # secili calisma alanina denetci kurallarini yaz (AGENTS.md + Cursor .mdc)
                 try:
                     import importlib
-                    os.environ.setdefault("APPRENTICE_HOME", HOME)
+                    os.environ["APPRENTICE_HOME"] = HOME   # --home her zaman kazanir (setdefault ezmiyordu)
                     kur = importlib.import_module("kur")
                     kur.set_root(ROOT); kur.log = lambda *a, **k: None
                     kur.kural_yaz(AYAR.get("kok", HOME))

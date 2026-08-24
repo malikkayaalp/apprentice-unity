@@ -443,6 +443,7 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
                 pass
 
     res = LoopResult(messages=msgs)
+    bos_tur = 0            # ust uste bos cevap sayaci (native yoldaki EMPTY_NUDGE karsiligi)
     for _adim in range(max_steps):
         turn = chat_stream(res.messages, tools=None, model=model, think=False,
                            num_ctx=NUM_CTX, temperature=0.0, num_predict=6000,
@@ -466,6 +467,19 @@ def canli_run(msgs: list, tools: list, dispatch, model: str, canli_yol: str,
             ham_gorunum += "\n<function=%s>...(%d parametre)</function>" % (
                 tc_name(c), len(tc_args(c)))
         akit("", ham_gorunum if ham_gorunum.strip() else icerik, zorla=True)
+        if not calls and not icerik:
+            # BOS CEVAP: native yolda (run_agent) EMPTY_NUDGE ile bir tur daha denenir; canli
+            # kipte hicbir koruma yoktu -> is "basarili" gorunerek BOS bitiyordu. Iki kip ayni
+            # sonuc sozlesmesini vermeli.
+            bos_tur += 1
+            if bos_tur < 2:
+                msgs.append({"role": "user", "content":
+                             "Bos cevap verdin. Ya bir arac cagir ya da bittiysen kisa Turkce "
+                             "ozet yaz (ne yazdin, hangi kriteri sagladin)."})
+                continue
+            res.final_text = ""
+            res.stopped = "empty_reply"
+            break
         if not calls:
             res.final_text = icerik
             res.stopped = "done"

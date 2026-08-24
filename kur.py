@@ -268,7 +268,10 @@ def model_uygula(ad: str) -> bool:
         oll["num_ctx"] = min(istek_ctx, int(kart["ctx"]))
     oll["temperature"] = 0.0
     dusunen = "thinking" in (kart.get("yetenekler") or [])
-    oll["think"] = False
+    if dusunen:
+        oll["think"] = False      # yalniz DUSUNEN modelde yaz (olculdu: acikken bosa ~3900 tok)
+    if not kart:
+        log(UYARI + "model karti okunamadi (Ollama kapali?) - ctx/think'e dokunulmadi")
     try:
         with open(p, "w", encoding="utf-8", newline="\n") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=1)
@@ -309,6 +312,8 @@ def kontrol_model() -> bool:
         return False
     if model in adlar:
         log(OK + "Model yuklu: %s" % model)
+        if DEGISTIR:
+            model_uygula(model)      # kart bazli ayar (ctx/think) - eskiden hic cagrilmiyordu
         model_raporu()
         return True
     log(UYARI + "Model yok: %s" % model)
@@ -367,6 +372,12 @@ def _appdata() -> str:
     return os.environ.get("APPDATA") or os.path.join(_ev(), "AppData", "Roaming")
 
 
+def _opencode_yolu() -> str:
+    kok = os.path.join(_ev(), ".config", "opencode")
+    jsonc = os.path.join(kok, "opencode.jsonc")
+    return jsonc if os.path.isfile(jsonc) else os.path.join(kok, "opencode.json")
+
+
 def ide_listesi() -> dict:
     """ad -> (ayar dosyasi, ust anahtar, 'kurulu mu' klasoru). Her IDE'nin MCP dosya semasi farkli:
     Cursor/Windsurf/Claude Desktop 'mcpServers', VS Code 'servers'."""
@@ -383,14 +394,17 @@ def ide_listesi() -> dict:
         vscode_ins = os.path.join(_ev(), "Library", "Application Support", "Code - Insiders", "User", "mcp.json")
         vscodium = os.path.join(_ev(), "Library", "Application Support", "VSCodium", "User", "mcp.json")
         trae = os.path.join(_ev(), "Library", "Application Support", "Trae", "User", "mcp.json")
+        zed = os.path.join(_ev(), ".config", "zed", "settings.json")
     elif os.name == "nt":
         vscode_ins = os.path.join(_appdata(), "Code - Insiders", "User", "mcp.json")
         vscodium = os.path.join(_appdata(), "VSCodium", "User", "mcp.json")
         trae = os.path.join(_appdata(), "Trae", "User", "mcp.json")
+        zed = os.path.join(_appdata(), "Zed", "settings.json")
     else:
         vscode_ins = os.path.join(_ev(), ".config", "Code - Insiders", "User", "mcp.json")
         vscodium = os.path.join(_ev(), ".config", "VSCodium", "User", "mcp.json")
         trae = os.path.join(_ev(), ".config", "Trae", "User", "mcp.json")
+        zed = os.path.join(_ev(), ".config", "zed", "settings.json")
     # Piyasadaki yaygin MCP istemcileri. Yalnizca KURULU olanlara yazilir (klasor kontrolu);
     # digerlerine hic dokunulmaz. Sema iki tur: VS Code ailesi "servers", geri kalani "mcpServers".
     return {
@@ -401,9 +415,9 @@ def ide_listesi() -> dict:
         "windsurf":       (os.path.join(_ev(), ".codeium", "windsurf", "mcp_config.json"), "mcpServers",
                            os.path.join(_ev(), ".codeium", "windsurf")),
         "trae":           (trae, "mcpServers", os.path.dirname(trae)),
-        "zed":            (os.path.join(_ev(), ".config", "zed", "settings.json"), "context_servers",
-                           os.path.join(_ev(), ".config", "zed")),
-        "opencode":       (os.path.join(_ev(), ".config", "opencode", "opencode.json"), "mcp",
+        "zed":            (zed, "context_servers", os.path.dirname(zed)),
+        # opencode tek dosya okur: kullanicinin opencode.jsonc'si varsa ona yaz, yoksa .json
+        "opencode":       (_opencode_yolu(), "mcp",
                            os.path.join(_ev(), ".config", "opencode")),
         "cline":          (os.path.join(_appdata() if os.name == "nt" else os.path.join(_ev(), ".config"),
                                         "Code", "User", "globalStorage",
@@ -421,6 +435,40 @@ def sunucu_girdisi() -> dict:
     return {"command": py.replace("\\", "/"), "args": [sunucu], "env": {"PYTHONIOENCODING": "utf-8"}}
 
 
+def _jsonc_oku(yol: str):
+    """// ve /* */ yorumlu JSON'u (JSONC) okumayi dene. Basarisizsa None."""
+    try:
+        with open(yol, encoding="utf-8") as f:
+            ham = f.read()
+        temiz, i, n, dize, kacis = [], 0, len(ham), False, False
+        while i < n:
+            c = ham[i]
+            if dize:
+                temiz.append(c)
+                if kacis:
+                    kacis = False
+                elif c == "\\":
+                    kacis = True
+                elif c == '"':
+                    dize = False
+                i += 1
+                continue
+            if c == '"':
+                dize = True; temiz.append(c); i += 1; continue
+            if c == "/" and i + 1 < n and ham[i + 1] == "/":
+                while i < n and ham[i] != "\n":
+                    i += 1
+                continue
+            if c == "/" and i + 1 < n and ham[i + 1] == "*":
+                son = ham.find("*/", i + 2)
+                i = n if son < 0 else son + 2
+                continue
+            temiz.append(c); i += 1
+        return json.loads("".join(temiz))
+    except Exception:
+        return None
+
+
 def ide_ayarla(ad: str, yol: str, anahtar: str, kurulu_dir: str) -> bool:
     istenen = sunucu_girdisi()
     if ad in ("vscode", "vscode-insiders", "vscodium"):
@@ -432,16 +480,25 @@ def ide_ayarla(ad: str, yol: str, anahtar: str, kurulu_dir: str) -> bool:
                    "environment": istenen.get("env", {})}
     elif ad == "zed":
         # zed settings.json: context_servers -> {"command": {...}}
-        istenen = {"source": "custom", "command": istenen["command"],
-                   "args": istenen["args"], "env": istenen.get("env", {})}
+        # Zed semasi: command bir NESNE (path/args/env) - yorum ile kod celisiyordu
+        istenen = {"source": "custom",
+                   "command": {"path": istenen["command"], "args": istenen["args"],
+                               "env": istenen.get("env", {})}}
     cfg = {}
     if os.path.exists(yol):
         try:
             with open(yol, encoding="utf-8") as f:
                 cfg = json.load(f)
         except Exception as e:
-            log(UYARI + "%s ayar dosyasi okunamadi (%s): %s" % (ad, yol, e))
-            return False
+            # Bu dosyalar JSONC olabilir (yorum satiri). Once yorumlari soyup dene; yine
+            # olmazsa DOKUNMA ve kurulumu dusurme (eskiden tek yorum satiri tum kurulumu
+            # "EKSIK" yapiyordu - ozet penceresi hic acilmiyordu).
+            cfg = _jsonc_oku(yol)
+            if cfg is None:
+                log(UYARI + "%s ayar dosyasi okunamadi, DOKUNULMADI (%s): %s"
+                    % (ad, yol, str(e)[:80]))
+                log(BILGI + "  elle ekle: %s -> \"%s\" altina apprentice girdisi" % (yol, anahtar))
+                return True          # kullanicinin dosyasini bozmaktansa atla; kurulum surer
     mevcut = (cfg.get(anahtar) or {}).get("apprentice")
     if mevcut and mevcut.get("args") == istenen.get("args") and mevcut.get("command") == istenen["command"]:
         log(OK + "%s: apprentice kayitli (%s)" % (ad, yol))
@@ -579,9 +636,33 @@ def claude_giris_baslat() -> bool:
         return False
 
 
+def _ps_tirnak(m: str) -> str:
+    """PowerShell tek tirnakli dizge kacisi: ' -> ''  (kullanici adinda tek tirnak varsa,
+    ornegin O'Brien, eskiden betik parse hatasi verip kisayol sessizce atlaniyordu)."""
+    return str(m).replace("'", "''")
+
+
+def _masaustu() -> str:
+    """Gercek Masaustu klasoru. os.path.expanduser('~')+'/Desktop' OneDrive yonlendirmeli
+    kurulumlarda YOK - kullanici masaustunde hicbir sey bulamiyordu."""
+    if os.name != "nt":
+        return os.path.join(os.path.expanduser("~"), "Desktop")
+    try:
+        r = kos(["powershell", "-NoProfile", "-Command",
+                 "[Environment]::GetFolderPath('Desktop')"], timeout=30)
+        yol = (r.stdout or "").strip()
+        if yol and os.path.isdir(yol):
+            return yol
+    except Exception:
+        pass
+    return os.path.join(os.path.expanduser("~"), "Desktop")
+
+
 def kisayol_yaz() -> bool:
     """Masaustune ve Baslat menusune 'Apprentice Panel' kisayolu (konsolsuz).
-    Kullanici komut satiri bilmek zorunda kalmasin: cift tik -> tarayicida panel."""
+    Kullanici komut satiri bilmek zorunda kalmasin: cift tik -> tarayicida panel.
+    DONUS: gercek sonuc (eskiden her durumda True donuyordu - kisayol yokken bile
+    adim '[ok]' gorunuyor, ozet penceresi olmayan bir kisayolu tarif ediyordu)."""
     if os.name != "nt":
         return True
     py = sistem_python() or sys.executable
@@ -589,29 +670,33 @@ def kisayol_yaz() -> bool:
     hedef = pyw if os.path.isfile(pyw) else py
     betik = os.path.join(ROOT, "panel_ac.py")
     if not os.path.isfile(betik):
-        return True
+        log(UYARI + "panel_ac.py bulunamadi (%s) - panel kisayolu yazilmadi" % ROOT)
+        return False
     yazildi = []
-    for klasor in (os.path.join(os.path.expanduser("~"), "Desktop"),
+    for klasor in (_masaustu(),
                    os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows",
                                 "Start Menu", "Programs")):
-        if not os.path.isdir(klasor):
+        if not klasor or not os.path.isdir(klasor):
             continue
         lnk = os.path.join(klasor, "Apprentice Panel.lnk")
         ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s');"
               "$s.TargetPath='%s';$s.Arguments='\"%s\"';$s.WorkingDirectory='%s';"
               "$s.IconLocation='%s';$s.Description='Apprentice canli panel';$s.Save()"
-              % (lnk, hedef, betik, ROOT, hedef))
+              % (_ps_tirnak(lnk), _ps_tirnak(hedef), _ps_tirnak(betik),
+                 _ps_tirnak(ROOT), _ps_tirnak(hedef)))
         try:
             r = kos(["powershell", "-NoProfile", "-Command", ps], timeout=30)
             if r.returncode == 0 and os.path.isfile(lnk):
                 yazildi.append(lnk)
-        except Exception:
-            pass
+            elif r.returncode != 0:
+                log(BILGI + "kisayol (%s): %s" % (klasor, (r.stderr or "").strip()[:120]))
+        except Exception as e:  # noqa: BLE001
+            log(BILGI + "kisayol (%s): %s" % (klasor, str(e)[:120]))
     if yazildi:
         log(OK + "Panel kisayolu: %s" % " ; ".join(yazildi))
-    else:
-        log(UYARI + "Kisayol yazilamadi - paneli elle ac: python panel_ac.py")
-    return True
+        return True
+    log(UYARI + "Kisayol yazilamadi - paneli elle ac: python panel_ac.py")
+    return False
 
 
 def oz_test() -> bool:

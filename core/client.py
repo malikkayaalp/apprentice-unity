@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 from core import tokens as _tok
 
-OLLAMA = "http://localhost:11434"
 DEFAULT_MODEL = "gpt-oss:120b"
 
 # Model is bitince RAM'de ne kadar kalsin. OLCULDU: 80B/Q4_K_XL modelin ~39 GB'i RAM'de durur
@@ -15,9 +14,15 @@ DEFAULT_MODEL = "gpt-oss:120b"
 try:
     from core import config as _cfg
     KEEP_ALIVE = _cfg.env_or("APPRENTICE_KEEP_ALIVE", "ollama.keep_alive", "30m")
+    # OLCULDU/DENETIM: burasi eskiden sabit "http://localhost:11434" idi; rag.py ve sunucu
+    # on kontrolu ollama.url'i okudugu icin kullanici uzak bir sunucu tanimlayinca on kontrol
+    # "model yuklu" der, ISCININ KENDISI localhost'a gidip ConnectionRefused ile duserdi.
+    OLLAMA = (_cfg.env_or("OLLAMA_URL", "ollama.url", "http://localhost:11434")
+              or "http://localhost:11434").rstrip("/")
 except Exception:  # cekirdek disinda tek basina kullanim
     import os as _os
     KEEP_ALIVE = _os.environ.get("APPRENTICE_KEEP_ALIVE", "30m")
+    OLLAMA = _os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
 
 
 @dataclass

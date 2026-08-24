@@ -42,8 +42,11 @@ def dosyalari_ac(kok: str, log) -> bool:
     if os.path.abspath(kok) == os.path.abspath(BURASI):
         log("[ok]  Geliştirme kipi: depo klasörü kurulum klasörü olarak kullanılıyor")
         return True
-    for ad in ("core", "mcpbridge", "server", "envs", "clients", "tests", "apprentice.config.template.json",
-               ".mcp.json", "kur.py", "README.md"):
+    for ad in ("core", "mcpbridge", "server", "envs", "clients", "tests",
+               "apprentice.config.template.json", ".mcp.json", "kur.py", "README.md",
+               # panel/izleyici dosyalari eksikti: kisayol sessizce atlaniyor, "Paneli ac"
+               # "once kurulumu tamamla" diyordu ama adim listesi hepsini ✓ gosteriyordu
+               "panel_ac.py", "izle.py", "STATE.md"):
         src = os.path.join(BURASI, ad)
         dst = os.path.join(kok, ad)
         if os.path.isdir(src):
@@ -187,7 +190,7 @@ class Sihirbaz(tk.Tk):
         self.btn_kural.pack(side="left")
         self.btn_panel = ttk.Button(alt, text="Paneli aç", command=self._panel)
         self.btn_panel.pack(side="left", padx=(8, 0))
-        ttk.Label(alt, text="Proje klasörüne .cursor/rules/apprentice.mdc + APPRENTICE.md yazar; IDE o projede\n"
+        ttk.Label(alt, text="Proje klasörüne AGENTS.md + .cursor/rules/apprentice.mdc yazar; IDE o projede\n"
                             "usta rolünü otomatik uygular (kodu kendisi yazmaz, worker_run'a verir).",
                   style="Alt.TLabel", font=(FONT, 8)).pack(side="left", padx=(10, 0))
         self.btn_kapat = ttk.Button(alt, text="Kapat", command=self.destroy)
@@ -470,7 +473,7 @@ class Sihirbaz(tk.Tk):
             return
         try:
             kur.kural_yaz(d)
-            messagebox.showinfo("Apprentice", "Kural dosyaları yazıldı:\n%s\\.cursor\\rules\\apprentice.mdc\n%s\\APPRENTICE.md" % (d, d))
+            messagebox.showinfo("Apprentice", "Kural dosyaları yazıldı:\n%s\\AGENTS.md\n%s\\.cursor\\rules\\apprentice.mdc" % (d, d))
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Apprentice", str(e))
 

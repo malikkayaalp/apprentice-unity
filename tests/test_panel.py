@@ -81,6 +81,51 @@ def yerlesim_butun() -> bool:
     return True
 
 
+def dizilimler_butun() -> bool:
+    """Her DIZILIM presetinde: gorunur paneller cakismamali, sutun tasmamali, panel adi
+    bilinmeyen/eksik olmamali. (Presetler elle yazildi; birinde cakisma olsa panel ust uste biner.)"""
+    with open(SAYFA, encoding="utf-8") as f:
+        html = f.read()
+    m = re.search(r"const DIZILIMLER=\{(.*?)\n\};", html, re.S)
+    assert m, "DIZILIMLER bulunamadi"
+    govde = m.group(1)
+    adlar_m = re.search(r"const PANEL_ADLARI=\{(.*?)\};", html, re.S)
+    tum_panel = set(re.findall(r"(\w+):\"", adlar_m.group(1)))
+    parcalar = re.split(r"\n  (?=\w+:\{etiket:)", govde)
+    toplam = 0
+    for parca in parcalar:
+        bas = re.match(r"\s*(\w+):\{etiket:", parca)
+        if not bas:
+            continue
+        ad = bas.group(1)
+        g = re.search(r"gizli:\[(.*?)\]", parca, re.S)
+        gizli = set(re.findall(r'"(\w+)"', g.group(1))) if g else set()
+        kutu = {}
+        for k in re.finditer(r"(\w+):\{gx:(\d+),gy:(\d+),gw:(\d+),gh:(\d+)\}", parca):
+            kutu[k.group(1)] = tuple(int(x) for x in k.groups()[1:])
+        if not kutu:
+            assert "VARSAYILAN" in parca, "%s: kutu yok" % ad
+            continue                      # dengeli: VARSAYILAN'a isaret eder, o ayrica denetlendi
+        bilinmeyen = (set(kutu) | gizli) - tum_panel
+        assert not bilinmeyen, "%s: bilinmeyen panel adi %s" % (ad, bilinmeyen)
+        eksik = tum_panel - set(kutu)
+        assert not eksik, "%s: yerlesimde tanimsiz panel %s" % (ad, eksik)
+        gorunur = [k for k in kutu if k not in gizli]
+        assert gorunur, "%s dizilimi: hic gorunur panel yok" % ad
+        for i in range(len(gorunur)):
+            for j in range(i + 1, len(gorunur)):
+                a_, b_ = kutu[gorunur[i]], kutu[gorunur[j]]
+                cak = not (a_[0] + a_[2] <= b_[0] or b_[0] + b_[2] <= a_[0] or
+                           a_[1] + a_[3] <= b_[1] or b_[1] + b_[3] <= a_[1])
+                assert not cak, "%s dizilimi: %s + %s cakisiyor" % (ad, gorunur[i], gorunur[j])
+        for k, (gx, _gy, gw, _gh) in kutu.items():
+            assert gx + gw <= 24, "%s/%s sutun tasmasi (%d+%d)" % (ad, k, gx, gw)
+        toplam += 1
+    assert toplam >= 5, "beklenenden az dizilim dogrulandi: %d" % toplam
+    print("dizilim presetleri: ok (%d dizilim, cakisma/tasma/eksik yok)" % toplam)
+    return True
+
+
 def sunucu_uclari() -> bool:
     ev = os.path.join(ROOT, ".apprentice_test_home", "panel_unit")
     os.makedirs(os.path.join(ev, "jobs"), exist_ok=True)
@@ -119,7 +164,8 @@ def sunucu_uclari() -> bool:
 
 
 def main() -> int:
-    ok = js_sozdizimi() and yerlesim_butun() and sunucu_uclari()
+    ok = (js_sozdizimi() and yerlesim_butun() and dizilimler_butun()
+          and sunucu_uclari())
     print("SONUC:", "GECTI" if ok else "KALDI")
     return 0 if ok else 1
 

@@ -7,21 +7,21 @@ Panel zaten calisiyorsa yeni sunucu BASLATMAZ, yalnizca tarayiciyi acar (port yo
 Kurulum bu betige masaustu/baslat kisayolu koyar; kullanici komut satiri bilmek zorunda degil.
 """
 from __future__ import annotations
-import os, socket, subprocess, sys, time, urllib.request, webbrowser
+import json, os, socket, subprocess, sys, time, urllib.request, webbrowser
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PENCERESIZ = 0x08000000 if os.name == "nt" else 0
 
 
 def ayakta(port: int) -> bool:
-    # ucuz uc: /api/isler sistem yoklamasi yaptigi icin saniyeler suruyordu (olculdu 2.1 sn)
-    for uc in ("/api/hazir", "/api/isler"):
-        try:
-            with urllib.request.urlopen("http://127.0.0.1:%d%s" % (port, uc), timeout=1.5):
-                return True
-        except Exception:
-            continue
-    return False
+    """Portta BIZIM panel mi? Yalniz HTTP 200'e bakmak yetmez: yabanci bir uygulama
+    (SPA dev sunuculari bilinmeyen yola da 200 doner) 'zaten calisiyor' sanilip
+    tarayicida ONUN sayfasi aciliyordu. Uc kimligi dogrulanir."""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:%d/api/hazir" % port, timeout=1.5) as r:
+            return json.loads(r.read().decode("utf-8", "replace") or "{}").get("hazir") is True
+    except Exception:
+        return False
 
 
 def bos_port(baslangic: int = 8788) -> int:
@@ -70,6 +70,22 @@ def uygulama_penceresi(url: str) -> bool:
     return False
 
 
+def cmd_of(py: str, betik: str, port: int) -> list:
+    return [py, betik, "--port", str(port)]
+
+
+def _hata(mesaj: str):
+    """Kisayoldan calisirken konsol yok - hatayi PENCEREYLE goster (sessiz basarisizlik yerine)."""
+    sys.stderr.write(mesaj + chr(10))
+    try:
+        import tkinter, tkinter.messagebox as mb
+        r = tkinter.Tk(); r.withdraw(); r.attributes("-topmost", 1)
+        mb.showerror("Apprentice Panel", mesaj)
+        r.destroy()
+    except Exception:
+        pass
+
+
 def main() -> int:
     tarayici_kipi = "--tarayici" in sys.argv        # istege bagli: normal sekmede ac
     port = int(os.environ.get("APPRENTICE_PANEL_PORT") or bos_port())
@@ -79,14 +95,26 @@ def main() -> int:
             aday = py[:-len("pythonw.exe")] + "python.exe"
             if os.path.isfile(aday):
                 py = aday
-        cmd = [py, os.path.join(ROOT, "clients", "web", "panel.py"), "--port", str(port)]
-        subprocess.Popen(cmd, cwd=ROOT, creationflags=PENCERESIZ,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
+        betik = os.path.join(ROOT, "clients", "web", "panel.py")
+        if not os.path.isfile(betik):
+            _hata("Panel dosyasi bulunamadi:\n%s\n\nKurulum eksik olabilir." % betik)
+            return 2
+        # stderr YAKALANIR: eskiden DEVNULL'a gidiyordu, sunucu hic kalkmasa bile 10 sn
+        # beklenip olu URL aciliyordu - kullanici sebebini goremiyordu.
+        p = subprocess.Popen(cmd_of(py, betik, port), cwd=ROOT, creationflags=PENCERESIZ,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.PIPE)
         for _ in range(120):                           # ayaga kalkmasini bekle
             time.sleep(0.08)
             if ayakta(port):
                 break
+            if p.poll() is not None:                   # surec oldu: sebebi goster
+                hata = (p.stderr.read() or b"").decode("utf-8", "replace")[-800:]
+                _hata("Panel sunucusu baslatilamadi (cikis %s):\n\n%s" % (p.returncode, hata))
+                return 1
+        else:
+            _hata("Panel sunucusu 10 sn icinde cevap vermedi (port %d)." % port)
+            return 1
     url = "http://127.0.0.1:%d" % port
     if tarayici_kipi or not uygulama_penceresi(url):
         webbrowser.open(url)
